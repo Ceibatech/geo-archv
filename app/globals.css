@@ -3385,7 +3385,7 @@ a {
   position: relative;
 }
 
-.login-input-shell input {
+.login-form .login-input-shell input {
   min-height: 52px;
   padding-right: 46px;
   padding-left: 46px;
