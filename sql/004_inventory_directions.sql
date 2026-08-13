@@ -1,16 +1,28 @@
--- CG1020 - liste officielle des directions d'inventaire
-
 SET NAMES utf8mb4;
 
 ALTER TABLE inventory_teams
-  MODIFY direction ENUM(
-    'DCM',
-    'DEMA',
-    'SDA',
-    'DTC',
-    'DAJC',
+MODIFY direction ENUM(
+    'GUF',
     'DDU',
+    'DUDU',
     'DGUF',
+    'DTC',
+    'GUPCCU',
+    'AGEF',
+    'SDA',
+    'SCPA',
     'SBICU',
-    'GUF'
-  ) NOT NULL;
+    'DGCMA',
+    'DEMA',
+    'DCM',
+    'DMISSA',
+    'DGLCV',
+    'DICAF',
+    'DGLPI',
+    'DCCV',
+    'SALA',
+    'DARRU',
+    'ANAH',
+    'SONAPIE',
+    'DAJC'
+) NOT NULL;

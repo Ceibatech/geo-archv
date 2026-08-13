@@ -4,7 +4,12 @@ import { useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
 import { ABIDJAN_COMMUNES } from "../lib/abidjan-communes";
-import type { AuthUser, Carton } from "@/types/domain";
+import {
+  CUSTOM_CASE_NATURE_OPTION,
+  formatSelectedCaseNature,
+  getCaseNaturesForDirection,
+} from "../lib/inventory-case-natures";
+import type { AuthUser, Carton, InventoryDirection } from "@/types/domain";
 
 type InventoryCarton = Pick<Carton, "id" | "cartonUid" | "libelle" | "barcode" | "dossierCount">;
 
@@ -58,9 +63,11 @@ function text(form: FormData, name: string) {
 export function InventoryForm({
   carton,
   operator,
+  direction,
 }: {
   carton: InventoryCarton | null;
   operator: Pick<AuthUser, "firstName" | "lastName" | "agentCode">;
+  direction: InventoryDirection | null;
 }) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
@@ -71,7 +78,9 @@ export function InventoryForm({
   const [cartonDamaged, setCartonDamaged] = useState<boolean | null>(null);
   const [dossierDamaged, setDossierDamaged] = useState(false);
   const [hasDifficulty, setHasDifficulty] = useState(false);
+  const [caseNatureSelection, setCaseNatureSelection] = useState("");
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
+  const caseNatures = getCaseNaturesForDirection(direction);
 
   function focusStep(nextStep: number) {
     requestAnimationFrame(() => {
@@ -138,6 +147,10 @@ export function InventoryForm({
     setError("");
     setSuccess("");
     const surfaceArea = text(form, "surfaceArea");
+    const caseNature = formatSelectedCaseNature(
+      text(form, "caseNature"),
+      text(form, "customCaseNature"),
+    );
 
     try {
       const response = await fetch("/api/inventory", {
@@ -164,7 +177,7 @@ export function InventoryForm({
           landTitleNumber: text(form, "landTitleNumber"),
           housingEstate: text(form, "housingEstate"),
           commune: text(form, "commune"),
-          caseNature: text(form, "caseNature"),
+          caseNature,
           lastName: text(form, "lastName"),
           firstNames: text(form, "firstNames"),
           address: text(form, "address"),
@@ -191,6 +204,7 @@ export function InventoryForm({
       formElement.reset();
       setDossierDamaged(false);
       setHasDifficulty(false);
+      setCaseNatureSelection("");
       setRequestId(crypto.randomUUID());
       setSuccess("Fiche enregistrée. Le questionnaire est prêt pour le dossier suivant.");
       setPending(false);
@@ -374,9 +388,30 @@ export function InventoryForm({
         title="Quelle est la nature du dossier ?"
         description="Indiquez le type exact inscrit sur le dossier."
       >
-        <div className="field">
+        <div className="form-grid">
+          <div className="field field-full">
           <label htmlFor="caseNature">Nature du dossier *</label>
-          <input id="caseNature" name="caseNature" maxLength={191} required placeholder="Ex. : ACD, titre foncier…" />
+            <select
+              id="caseNature"
+              name="caseNature"
+              value={caseNatureSelection}
+              onChange={(event) => setCaseNatureSelection(event.target.value)}
+              required
+            >
+              <option value="">Sélectionner la nature du dossier</option>
+              {caseNatures.map((nature) => <option value={nature} key={nature}>{nature}</option>)}
+              <option value={CUSTOM_CASE_NATURE_OPTION}>Autre nature — à préciser</option>
+            </select>
+            <p className="field-hint">
+              {direction ? `Liste adaptée à la direction ${direction}.` : "Liste générale des dossiers d’inventaire."}
+            </p>
+          </div>
+          {caseNatureSelection === CUSTOM_CASE_NATURE_OPTION ? (
+            <div className="field field-full">
+              <label htmlFor="customCaseNature">Précisez la nature du dossier *</label>
+              <input id="customCaseNature" name="customCaseNature" maxLength={170} required />
+            </div>
+          ) : null}
         </div>
       </QuestionnaireStep>
 

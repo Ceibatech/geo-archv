@@ -277,7 +277,7 @@ export function TeamAdmin({
                 <select id="team-direction" name="direction" defaultValue="DCM" required>
                   {INVENTORY_DIRECTIONS.map((item) => <option key={item} value={item}>{item}</option>)}
                 </select>
-                <p className="field-hint">DCM, DEMA, SDA, DTC, DAJC, DDU, DGUF, SBICU ou GUF.</p>
+                <p className="field-hint">Choisissez la direction dans laquelle l’équipe réalise l’inventaire.</p>
               </div>
               <div className="field">
                 <label htmlFor="team-supervisor">Superviseur responsable *</label>

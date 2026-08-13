@@ -67,7 +67,12 @@ export default async function InventoryHomePage({
       )}
 
       {user.agentCode ? (
-        <InventoryForm key={formCarton?.id ?? "nouveau-carton"} carton={formCarton} operator={user} />
+        <InventoryForm
+          key={formCarton?.id ?? "nouveau-carton"}
+          carton={formCarton}
+          operator={user}
+          direction={inventoryTeam?.direction ?? null}
+        />
       ) : (
         <p className="message message-error">Un code agent doit être attribué à votre compte avant la saisie.</p>
       )}

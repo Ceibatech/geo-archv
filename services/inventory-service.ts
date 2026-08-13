@@ -8,8 +8,10 @@ import type { z } from "zod";
 import { getPool } from "@/db/mysql";
 import { dateInAppTimeZone, formatCartonUid } from "@/lib/date";
 import { conflict, forbidden, notFound } from "@/lib/errors";
+import { isCaseNatureAllowedForDirection } from "@/lib/inventory-case-natures";
 import type { AuthUser, CartonStatus, InventoryRecordListItem } from "@/types/domain";
 import type { createInventorySchema, updateInventorySchema } from "@/lib/validation";
+import { getAgentInventoryTeam } from "@/services/team-service";
 
 export type CreateInventoryInput = z.infer<typeof createInventorySchema>;
 export type UpdateInventoryInput = z.infer<typeof updateInventorySchema>;
@@ -113,6 +115,13 @@ function assertOwner(user: AuthUser, createdBy: number) {
   }
 }
 
+async function assertCaseNatureMatchesAgentDirection(caseNature: string, user: AuthUser) {
+  const team = await getAgentInventoryTeam(user.id);
+  if (!isCaseNatureAllowedForDirection(caseNature, team?.direction ?? null)) {
+    throw conflict("La nature du dossier ne correspond pas à la direction de l’agent.");
+  }
+}
+
 export async function getInventoryRecordById(id: number, user: AuthUser) {
   const [rows] = await getPool().execute<InventoryDetailRow[]>(`${SELECT_DETAIL} WHERE ir.id = ? LIMIT 1`, [id]);
   const record = rows[0];
@@ -133,6 +142,7 @@ async function getRecordByRequestId(clientRequestId: string, user: AuthUser) {
 }
 
 export async function createInventoryRecord(input: CreateInventoryInput, user: AuthUser) {
+  await assertCaseNatureMatchesAgentDirection(input.caseNature, user);
   const connection = await getPool().getConnection();
   try {
     await connection.beginTransaction();
@@ -318,6 +328,9 @@ export async function listInventoryRecords(
 }
 
 export async function updateInventoryRecord(id: number, input: UpdateInventoryInput, user: AuthUser) {
+  if (input.caseNature !== undefined) {
+    await assertCaseNatureMatchesAgentDirection(input.caseNature, user);
+  }
   const connection = await getPool().getConnection();
   try {
     await connection.beginTransaction();
