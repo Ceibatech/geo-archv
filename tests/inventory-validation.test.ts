@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { createInventorySchema } from "../lib/validation";
+import { createInventorySchema, inventorySubmissionSchema } from "../lib/validation";
+
+const pngDataUrl = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
 
 const dossier = {
   clientRequestId: "70631f8f-9bd0-48e4-af55-2084f1122b01",
@@ -82,6 +84,30 @@ describe("validation de la fiche simplifiée", () => {
       ...dossier,
       cartonId: 42,
       commune: "Bouaké",
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("exige une signature et un consentement pour transmettre une nouvelle fiche", () => {
+    const unsigned = inventorySubmissionSchema.safeParse({ ...dossier, cartonId: 42 });
+    const signed = inventorySubmissionSchema.safeParse({
+      ...dossier,
+      cartonId: 42,
+      signatureDataUrl: pngDataUrl,
+      consent: true,
+    });
+
+    expect(unsigned.success).toBe(false);
+    expect(signed.success).toBe(true);
+  });
+
+  it("refuse une signature sans consentement explicite", () => {
+    const result = inventorySubmissionSchema.safeParse({
+      ...dossier,
+      cartonId: 42,
+      signatureDataUrl: pngDataUrl,
+      consent: false,
     });
 
     expect(result.success).toBe(false);

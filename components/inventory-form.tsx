@@ -3,6 +3,7 @@
 import { useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
+import { SignaturePad } from "./signature-pad";
 import { ABIDJAN_COMMUNES } from "../lib/abidjan-communes";
 import {
   CUSTOM_CASE_NATURE_OPTION,
@@ -22,7 +23,10 @@ const STEPS = [
   { label: "La personne concernée", compact: "Personne" },
   { label: "Les contacts", compact: "Contacts" },
   { label: "Les compléments", compact: "Contrôle" },
+  { label: "La signature", compact: "Signature" },
 ] as const;
+
+const CONTROL_STEP = 7;
 
 function QuestionnaireStep({
   active,
@@ -80,6 +84,9 @@ export function InventoryForm({
   const [hasDifficulty, setHasDifficulty] = useState(false);
   const [caseNatureSelection, setCaseNatureSelection] = useState("");
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
+  const [signature, setSignature] = useState<string | null>(null);
+  const [signatureKey, setSignatureKey] = useState(0);
+  const [consent, setConsent] = useState(false);
   const caseNatures = getCaseNaturesForDirection(direction);
 
   function focusStep(nextStep: number) {
@@ -123,6 +130,13 @@ export function InventoryForm({
     const form = new FormData(formElement);
     if (!carton && cartonDamaged === null) {
       setError("Choisissez l’état du carton avant d’enregistrer la fiche.");
+      setStep(CONTROL_STEP);
+      focusStep(CONTROL_STEP);
+      return;
+    }
+
+    if (!signature || !consent) {
+      setError("Tracez une nouvelle signature et confirmez votre visa avant de transmettre la fiche.");
       setStep(STEPS.length - 1);
       focusStep(STEPS.length - 1);
       return;
@@ -190,6 +204,8 @@ export function InventoryForm({
           hasDifficulty,
           difficultyNote: text(form, "difficultyNote"),
           closeCarton: false,
+          signatureDataUrl: signature,
+          consent,
         }),
       });
       const payload = await response.json();
@@ -206,7 +222,10 @@ export function InventoryForm({
       setHasDifficulty(false);
       setCaseNatureSelection("");
       setRequestId(crypto.randomUUID());
-      setSuccess("Fiche enregistrée. Le questionnaire est prêt pour le dossier suivant.");
+      setSignature(null);
+      setConsent(false);
+      setSignatureKey((value) => value + 1);
+      setSuccess("Fiche signée et transmise au superviseur. Le questionnaire est prêt pour le dossier suivant.");
       setPending(false);
       setStep(1);
       router.refresh();
@@ -512,6 +531,22 @@ export function InventoryForm({
         </div>
       </QuestionnaireStep>
 
+      <QuestionnaireStep
+        active={step === 8}
+        index={8}
+        title="Signez et transmettez cette fiche"
+        description="Chaque fiche exige un nouveau visa. Votre signature ne sera jamais reprise automatiquement sur la fiche suivante."
+      >
+        <div className="inventory-signature-step">
+          <SignaturePad key={signatureKey} label="Signature de l’agent" onChange={setSignature} />
+          <label className="signature-consent">
+            <input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} />
+            <span>Je confirme l’exactitude des informations de cette fiche et je la transmets à mon superviseur pour approbation ou rejet.</span>
+          </label>
+          <p className="field-hint">Après transmission, la fiche sera verrouillée jusqu’à la décision du superviseur.</p>
+        </div>
+      </QuestionnaireStep>
+
       <div className="questionnaire-actions">
         <button
           className="button button-secondary"
@@ -529,9 +564,9 @@ export function InventoryForm({
           <button
             className="button button-primary"
             type="submit"
-            disabled={pending || (!carton && cartonDamaged === null)}
+            disabled={pending || (!carton && cartonDamaged === null) || !signature || !consent}
           >
-            {pending ? "Enregistrement…" : "Enregistrer la fiche"}
+            {pending ? "Transmission…" : "Signer et transmettre la fiche"}
           </button>
         )}
       </div>

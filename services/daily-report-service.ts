@@ -1,12 +1,11 @@
 import "server-only";
 
-import { createHash } from "node:crypto";
-
 import type { PoolConnection, ResultSetHeader, RowDataPacket } from "mysql2/promise";
 
 import { getPool } from "@/db/mysql";
 import { dateInAppTimeZone } from "@/lib/date";
-import { AppError, conflict, forbidden, notFound } from "@/lib/errors";
+import { conflict, forbidden, notFound } from "@/lib/errors";
+import { decodePngSignature } from "@/lib/signature";
 import type {
   AuthUser,
   DailyReportEmailStatus,
@@ -31,6 +30,7 @@ type MetricRow = RowDataPacket & {
 };
 
 type DifficultyRow = RowDataPacket & { note: string };
+type IdRow = RowDataPacket & { id: number };
 
 type ReportRow = RowDataPacket & {
   id: number;
@@ -141,17 +141,25 @@ function shiftDate(value: string, days: number) {
   return date.toISOString().slice(0, 10);
 }
 
-function decodeSignature(dataUrl: string) {
-  const encoded = dataUrl.slice("data:image/png;base64,".length);
-  const signature = Buffer.from(encoded, "base64");
-  const pngHeader = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-  if (signature.length < 100 || signature.length > 350_000 || !signature.subarray(0, 8).equals(pngHeader)) {
-    throw new AppError("La signature PNG est vide ou invalide.", 400, "INVALID_SIGNATURE");
+async function assertFreshDailySignature(
+  connection: PoolConnection,
+  userId: number,
+  role: "agent" | "supervisor",
+  hash: string,
+) {
+  const userColumn = role === "agent" ? "agent_user_id" : "supervisor_user_id";
+  const hashColumn = role === "agent" ? "agent_signature_sha256" : "supervisor_signature_sha256";
+  const [rows] = await connection.execute<IdRow[]>(
+    `SELECT id FROM daily_reports WHERE ${userColumn} = ? AND ${hashColumn} = ?
+     UNION ALL
+     SELECT id FROM daily_report_events
+     WHERE actor_user_id = ? AND JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.signatureHash')) = ?
+     LIMIT 1`,
+    [userId, hash, userId, hash],
+  );
+  if (rows[0]) {
+    throw conflict("Cette signature a déjà été utilisée. Tracez une nouvelle signature pour cette fiche.");
   }
-  return {
-    signature,
-    hash: createHash("sha256").update(signature).digest("hex"),
-  };
 }
 
 async function getAgentTeamContext(connection: PoolConnection, userId: number, lock = false) {
@@ -304,11 +312,12 @@ export async function signAgentDailyReport(
   input: { signatureDataUrl: string; consent: boolean; comment?: string },
 ) {
   if (user.role !== "agent") throw forbidden();
-  const { signature, hash } = decodeSignature(input.signatureDataUrl);
+  const { signature, hash } = decodePngSignature(input.signatureDataUrl);
   const reportDate = dateInAppTimeZone();
   const connection = await getPool().getConnection();
   try {
     await connection.beginTransaction();
+    await assertFreshDailySignature(connection, user.id, "agent", hash);
     const team = await getAgentTeamContext(connection, user.id, true);
     if (!team) throw conflict("Votre compte doit être affecté à une équipe avant de signer le rapport.");
     const snapshot = await readSnapshot(connection, user.id, reportDate);
@@ -378,10 +387,11 @@ export async function approveDailyReport(
   input: { signatureDataUrl: string; consent: boolean; comment?: string },
 ) {
   if (user.role !== "superviseur") throw forbidden();
-  const { signature, hash } = decodeSignature(input.signatureDataUrl);
+  const { signature, hash } = decodePngSignature(input.signatureDataUrl);
   const connection = await getPool().getConnection();
   try {
     await connection.beginTransaction();
+    await assertFreshDailySignature(connection, user.id, "supervisor", hash);
     const [rows] = await connection.execute<LockedReportRow[]>(
       `SELECT id, status, agent_user_id AS agentUserId, supervisor_user_id AS supervisorUserId, version
        FROM daily_reports WHERE id = ? FOR UPDATE`,

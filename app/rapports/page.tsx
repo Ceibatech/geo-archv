@@ -15,6 +15,10 @@ export default async function ReportsPage() {
     listDailyReports(user),
     user.role === "agent" ? getAgentDailyReportPreview(user) : Promise.resolve(null),
   ]);
+  const currentAgentReport = preview
+    ? reports.find((report) => report.reportDate === preview.reportDate)
+    : undefined;
+  const agentWorkflowKey = `${preview?.reportDate ?? "no-preview"}:${currentAgentReport?.id ?? "new"}:${currentAgentReport?.version ?? 0}:${currentAgentReport?.status ?? "unsigned"}`;
 
   return (
     <AppShell user={user} active="rapports" title="Rapports journaliers CG1020">
@@ -33,7 +37,12 @@ export default async function ReportsPage() {
       </div>
 
       {user.role === "agent" ? (
-        <AgentReportsWorkspace preview={preview} reports={reports} agentName={`${user.firstName} ${user.lastName}`} />
+        <AgentReportsWorkspace
+          key={agentWorkflowKey}
+          preview={preview}
+          reports={reports}
+          agentName={`${user.firstName} ${user.lastName}`}
+        />
       ) : user.role === "superviseur" ? (
         <SupervisorReportsWorkspace reports={reports} />
       ) : (

@@ -2,19 +2,27 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 
-import type { ResultSetHeader, RowDataPacket } from "mysql2/promise";
+import type { PoolConnection, ResultSetHeader, RowDataPacket } from "mysql2/promise";
 import type { z } from "zod";
 
 import { getPool } from "@/db/mysql";
 import { dateInAppTimeZone, formatCartonUid } from "@/lib/date";
 import { conflict, forbidden, notFound } from "@/lib/errors";
 import { isCaseNatureAllowedForDirection } from "@/lib/inventory-case-natures";
-import type { AuthUser, CartonStatus, InventoryRecordListItem } from "@/types/domain";
-import type { createInventorySchema, updateInventorySchema } from "@/lib/validation";
+import { decodePngSignature } from "@/lib/signature";
+import type {
+  AuthUser,
+  CartonStatus,
+  InventoryRecordListItem,
+  InventoryRecordReview,
+  InventoryReviewStatus,
+} from "@/types/domain";
+import type { inventoryResubmissionSchema, inventorySubmissionSchema, updateInventorySchema } from "@/lib/validation";
 import { getAgentInventoryTeam } from "@/services/team-service";
 
-export type CreateInventoryInput = z.infer<typeof createInventorySchema>;
+export type CreateInventoryInput = z.infer<typeof inventorySubmissionSchema>;
 export type UpdateInventoryInput = z.infer<typeof updateInventorySchema>;
+export type ResubmitInventoryInput = z.infer<typeof inventoryResubmissionSchema>;
 
 type CartonLockRow = RowDataPacket & {
   createdBy: number;
@@ -23,9 +31,21 @@ type CartonLockRow = RowDataPacket & {
 
 type LockedUserRow = RowDataPacket & { agentCode: string | null; isActive: number };
 type IdRow = RowDataPacket & { id: number };
+type TeamReviewRow = RowDataPacket & { teamId: number; supervisorUserId: number };
+type ReviewLockRow = RowDataPacket & {
+  id: number;
+  createdBy: number;
+  supervisorUserId: number | null;
+  reviewStatus: InventoryReviewStatus;
+};
 
 type InventoryListRow = RowDataPacket & Omit<InventoryRecordListItem, "dossierDamaged"> & {
   dossierDamaged: number;
+};
+
+type InventoryReviewRow = RowDataPacket & Omit<InventoryRecordReview, "dossierDamaged" | "hasDifficulty"> & {
+  dossierDamaged: number;
+  hasDifficulty: number;
 };
 
 type CountRow = RowDataPacket & { total: number };
@@ -60,6 +80,16 @@ type InventoryDetailRow = RowDataPacket & {
   agentName: string;
   createdAt: string;
   updatedAt: string;
+  supervisorUserId: number | null;
+  supervisorName: string | null;
+  reviewStatus: InventoryReviewStatus;
+  reviewVersion: number;
+  agentSignatureSha256: string | null;
+  agentSignedAt: string | null;
+  supervisorSignatureSha256: string | null;
+  supervisorSignedAt: string | null;
+  supervisorComment: string | null;
+  rejectionReason: string | null;
 };
 
 const SELECT_DETAIL = `SELECT
@@ -91,27 +121,99 @@ const SELECT_DETAIL = `SELECT
   ir.created_by AS createdBy,
   u.agent_code AS agentCode,
   CONCAT(u.first_name, ' ', u.last_name) AS agentName,
+  ir.supervisor_user_id AS supervisorUserId,
+  CASE WHEN supervisor.id IS NULL THEN NULL ELSE CONCAT(supervisor.first_name, ' ', supervisor.last_name) END AS supervisorName,
+  ir.review_status AS reviewStatus,
+  ir.review_version AS reviewVersion,
+  ir.agent_signature_sha256 AS agentSignatureSha256,
+  ir.agent_signed_at AS agentSignedAt,
+  ir.supervisor_signature_sha256 AS supervisorSignatureSha256,
+  ir.supervisor_signed_at AS supervisorSignedAt,
+  ir.supervisor_comment AS supervisorComment,
+  ir.rejection_reason AS rejectionReason,
   ir.created_at AS createdAt,
   ir.updated_at AS updatedAt
 FROM inventory_records ir
 INNER JOIN cartons c ON c.id = ir.carton_id
-INNER JOIN users u ON u.id = ir.created_by`;
+INNER JOIN users u ON u.id = ir.created_by
+LEFT JOIN users supervisor ON supervisor.id = ir.supervisor_user_id`;
 
 function mapDetail(row: InventoryDetailRow) {
   return {
     ...row,
+    id: Number(row.id),
+    cartonId: Number(row.cartonId),
+    createdBy: Number(row.createdBy),
+    supervisorUserId: row.supervisorUserId === null ? null : Number(row.supervisorUserId),
+    reviewVersion: Number(row.reviewVersion),
     dossierDamaged: Boolean(row.dossierDamaged),
     hasDifficulty: Boolean(row.hasDifficulty),
   };
 }
 
-function isDuplicateEntry(error: unknown) {
+async function getReviewTeam(connection: PoolConnection, userId: number) {
+  const [rows] = await connection.execute<TeamReviewRow[]>(
+    `SELECT t.id AS teamId, t.supervisor_user_id AS supervisorUserId
+     FROM inventory_team_members tm
+     INNER JOIN inventory_teams t ON t.id = tm.team_id
+     INNER JOIN users supervisor ON supervisor.id = t.supervisor_user_id
+     WHERE tm.user_id = ? AND supervisor.is_active = TRUE
+     LIMIT 1 FOR UPDATE`,
+    [userId],
+  );
+  const row = rows[0];
+  if (!row) throw conflict("Votre compte doit être affecté à une équipe avec un superviseur avant de signer cette fiche.");
+  return { teamId: Number(row.teamId), supervisorUserId: Number(row.supervisorUserId) };
+}
+
+async function assertFreshInventorySignature(
+  connection: PoolConnection,
+  userId: number,
+  role: "agent" | "supervisor",
+  hash: string,
+) {
+  const userColumn = role === "agent" ? "created_by" : "supervisor_user_id";
+  const hashColumn = role === "agent" ? "agent_signature_sha256" : "supervisor_signature_sha256";
+  const [rows] = await connection.execute<IdRow[]>(
+    `SELECT id FROM inventory_records WHERE ${userColumn} = ? AND ${hashColumn} = ?
+     UNION ALL
+     SELECT id FROM inventory_record_events
+     WHERE actor_user_id = ? AND JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.signatureHash')) = ?
+     LIMIT 1`,
+    [userId, hash, userId, hash],
+  );
+  if (rows[0]) throw conflict("Cette signature a déjà été utilisée. Tracez une nouvelle signature pour cette fiche.");
+}
+
+async function addReviewEvent(
+  connection: PoolConnection,
+  recordId: number,
+  actorUserId: number,
+  eventType: string,
+  metadata?: Record<string, unknown>,
+) {
+  await connection.execute(
+    "INSERT INTO inventory_record_events (record_id, actor_user_id, event_type, metadata) VALUES (?, ?, ?, ?)",
+    [recordId, actorUserId, eventType, metadata ? JSON.stringify(metadata) : null],
+  );
+}
+
+function isDuplicateEntry(error: unknown): error is { code: "ER_DUP_ENTRY"; sqlMessage?: unknown } {
   return typeof error === "object" && error !== null && "code" in error && error.code === "ER_DUP_ENTRY";
 }
 
-function assertOwner(user: AuthUser, createdBy: number) {
+function isSignatureDuplicate(error: unknown) {
+  if (!isDuplicateEntry(error)) return false;
+  const message = "sqlMessage" in error ? String(error.sqlMessage) : String(error);
+  return message.includes("uq_inventory_agent_signature") || message.includes("uq_inventory_supervisor_signature");
+}
+
+function assertOwner(user: AuthUser, createdBy: number, supervisorUserId?: number | null) {
   if (user.role === "agent" && user.id !== createdBy) {
     throw forbidden("Cette fiche appartient à un autre agent.");
+  }
+  if (user.role === "superviseur" && user.id !== supervisorUserId) {
+    throw forbidden("Cette fiche appartient à une autre équipe.");
   }
 }
 
@@ -126,7 +228,7 @@ export async function getInventoryRecordById(id: number, user: AuthUser) {
   const [rows] = await getPool().execute<InventoryDetailRow[]>(`${SELECT_DETAIL} WHERE ir.id = ? LIMIT 1`, [id]);
   const record = rows[0];
   if (!record) throw notFound("Fiche d'inventaire introuvable.");
-  assertOwner(user, record.createdBy);
+  assertOwner(user, record.createdBy, record.supervisorUserId);
   return mapDetail(record);
 }
 
@@ -137,15 +239,28 @@ async function getRecordByRequestId(clientRequestId: string, user: AuthUser) {
   );
   const record = rows[0];
   if (!record) throw conflict("La requête a déjà été traitée, mais la fiche est introuvable.");
-  assertOwner(user, record.createdBy);
+  assertOwner(user, record.createdBy, record.supervisorUserId);
   return mapDetail(record);
 }
 
 export async function createInventoryRecord(input: CreateInventoryInput, user: AuthUser) {
   await assertCaseNatureMatchesAgentDirection(input.caseNature, user);
+  const { signature, hash } = decodePngSignature(input.signatureDataUrl);
   const connection = await getPool().getConnection();
   try {
     await connection.beginTransaction();
+
+    const [duplicateRows] = await connection.execute<IdRow[]>(
+      "SELECT id FROM inventory_records WHERE client_request_id = ? LIMIT 1 FOR UPDATE",
+      [input.clientRequestId],
+    );
+    if (duplicateRows[0]) {
+      await connection.rollback();
+      return { record: await getRecordByRequestId(input.clientRequestId, user), duplicate: true };
+    }
+
+    const team = await getReviewTeam(connection, user.id);
+    await assertFreshInventorySignature(connection, user.id, "agent", hash);
 
     let cartonId = input.cartonId;
 
@@ -208,8 +323,9 @@ export async function createInventoryRecord(input: CreateInventoryInput, user: A
         ilot_number, lot_number, surface_area, land_title_number, housing_estate, commune,
         case_nature, last_name, first_names, address, phone, email, contact_person,
         contact_mobile, dossier_damaged, dossier_damage_note, has_difficulty,
-        difficulty_note, inventory_date, created_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        difficulty_note, inventory_date, created_by, supervisor_user_id, review_status,
+        review_version, agent_signature, agent_signature_sha256, agent_signed_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING_SUPERVISOR', 1, ?, ?, CURRENT_TIMESTAMP)`,
       [
         cartonId,
         input.clientRequestId,
@@ -236,8 +352,17 @@ export async function createInventoryRecord(input: CreateInventoryInput, user: A
         input.difficultyNote ?? null,
         dateInAppTimeZone(),
         user.id,
+        team.supervisorUserId,
+        signature,
+        hash,
       ],
     );
+
+    await addReviewEvent(connection, result.insertId, user.id, "AGENT_SIGNED", {
+      signatureHash: hash,
+      teamId: team.teamId,
+      supervisorUserId: team.supervisorUserId,
+    });
 
     if (input.closeCarton) {
       await connection.execute("UPDATE cartons SET status = 'CLOSED' WHERE id = ?", [cartonId]);
@@ -247,6 +372,9 @@ export async function createInventoryRecord(input: CreateInventoryInput, user: A
     return { record: await getInventoryRecordById(result.insertId, user), duplicate: false };
   } catch (error) {
     await connection.rollback();
+    if (isSignatureDuplicate(error)) {
+      throw conflict("Cette signature a déjà été utilisée. Tracez une nouvelle signature pour cette fiche.");
+    }
     if (isDuplicateEntry(error)) {
       return { record: await getRecordByRequestId(input.clientRequestId, user), duplicate: true };
     }
@@ -305,10 +433,21 @@ export async function listInventoryRecords(
        ir.dossier_damaged AS dossierDamaged,
        ir.inventory_date AS inventoryDate,
        u.agent_code AS agentCode,
-       CONCAT(u.first_name, ' ', u.last_name) AS agentName
+       CONCAT(u.first_name, ' ', u.last_name) AS agentName,
+       ir.supervisor_user_id AS supervisorUserId,
+       CASE WHEN supervisor.id IS NULL THEN NULL ELSE CONCAT(supervisor.first_name, ' ', supervisor.last_name) END AS supervisorName,
+       ir.review_status AS reviewStatus,
+       ir.review_version AS reviewVersion,
+       ir.agent_signature_sha256 AS agentSignatureSha256,
+       ir.agent_signed_at AS agentSignedAt,
+       ir.supervisor_signature_sha256 AS supervisorSignatureSha256,
+       ir.supervisor_signed_at AS supervisorSignedAt,
+       ir.supervisor_comment AS supervisorComment,
+       ir.rejection_reason AS rejectionReason
      FROM inventory_records ir
      INNER JOIN cartons c ON c.id = ir.carton_id
      INNER JOIN users u ON u.id = ir.created_by
+     LEFT JOIN users supervisor ON supervisor.id = ir.supervisor_user_id
      ${whereClause}
      ORDER BY ir.created_at DESC, ir.id DESC
      LIMIT ? OFFSET ?`,
@@ -317,7 +456,14 @@ export async function listInventoryRecords(
 
   const total = Number(countRows[0]?.total ?? 0);
   return {
-    data: rows.map((row) => ({ ...row, dossierDamaged: Boolean(row.dossierDamaged) })),
+    data: rows.map((row) => ({
+      ...row,
+      id: Number(row.id),
+      cartonId: Number(row.cartonId),
+      supervisorUserId: row.supervisorUserId === null ? null : Number(row.supervisorUserId),
+      reviewVersion: Number(row.reviewVersion),
+      dossierDamaged: Boolean(row.dossierDamaged),
+    })),
     pagination: {
       page: input.page,
       pageSize: input.pageSize,
@@ -335,9 +481,9 @@ export async function updateInventoryRecord(id: number, input: UpdateInventoryIn
   try {
     await connection.beginTransaction();
     const [rows] = await connection.execute<
-      (RowDataPacket & { createdBy: number; cartonStatus: CartonStatus })[]
+      (RowDataPacket & { createdBy: number; cartonStatus: CartonStatus; reviewStatus: InventoryReviewStatus })[]
     >(
-      `SELECT ir.created_by AS createdBy, c.status AS cartonStatus
+      `SELECT ir.created_by AS createdBy, c.status AS cartonStatus, ir.review_status AS reviewStatus
        FROM inventory_records ir
        INNER JOIN cartons c ON c.id = ir.carton_id
        WHERE ir.id = ? FOR UPDATE`,
@@ -346,6 +492,9 @@ export async function updateInventoryRecord(id: number, input: UpdateInventoryIn
     const record = rows[0];
     if (!record) throw notFound("Fiche d'inventaire introuvable.");
     assertOwner(user, record.createdBy);
+    if (user.role === "agent" && record.reviewStatus !== "REJECTED") {
+      throw conflict("Seule une fiche rejetée peut être corrigée puis signée de nouveau.");
+    }
     if (user.role === "agent" && record.cartonStatus !== "OPEN") {
       throw conflict("Une fiche d'un carton terminé ne peut plus être modifiée par l'agent.");
     }
@@ -390,6 +539,221 @@ export async function updateInventoryRecord(id: number, input: UpdateInventoryIn
     return await getInventoryRecordById(id, user);
   } catch (error) {
     await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+export async function listInventoryReviews(user: AuthUser) {
+  if (user.role !== "superviseur" && user.role !== "executif") throw forbidden();
+  const where = user.role === "superviseur" ? "WHERE ir.supervisor_user_id = ?" : "";
+  const values = user.role === "superviseur" ? [user.id] : [];
+  const [rows] = await getPool().execute<InventoryReviewRow[]>(
+    `SELECT
+       ir.id,
+       ir.carton_id AS cartonId,
+       c.carton_uid AS cartonUid,
+       ir.case_nature AS caseNature,
+       ir.guichet_number AS guichetNumber,
+       ir.ddu_number AS dduNumber,
+       ir.classification_reference AS classificationReference,
+       ir.commune,
+       ir.last_name AS lastName,
+       ir.first_names AS firstNames,
+       ir.dossier_damaged AS dossierDamaged,
+       ir.dossier_damage_note AS dossierDamageNote,
+       ir.has_difficulty AS hasDifficulty,
+       ir.difficulty_note AS difficultyNote,
+       ir.inventory_date AS inventoryDate,
+       ir.created_by AS createdBy,
+       agent.agent_code AS agentCode,
+       CONCAT(agent.first_name, ' ', agent.last_name) AS agentName,
+       ir.supervisor_user_id AS supervisorUserId,
+       CASE WHEN supervisor.id IS NULL THEN NULL ELSE CONCAT(supervisor.first_name, ' ', supervisor.last_name) END AS supervisorName,
+       ir.review_status AS reviewStatus,
+       ir.review_version AS reviewVersion,
+       ir.agent_signature_sha256 AS agentSignatureSha256,
+       ir.agent_signed_at AS agentSignedAt,
+       ir.supervisor_signature_sha256 AS supervisorSignatureSha256,
+       ir.supervisor_signed_at AS supervisorSignedAt,
+       ir.supervisor_comment AS supervisorComment,
+       ir.rejection_reason AS rejectionReason,
+       ir.created_at AS createdAt
+     FROM inventory_records ir
+     INNER JOIN cartons c ON c.id = ir.carton_id
+     INNER JOIN users agent ON agent.id = ir.created_by
+     LEFT JOIN users supervisor ON supervisor.id = ir.supervisor_user_id
+     ${where}
+     ORDER BY FIELD(ir.review_status, 'PENDING_SUPERVISOR', 'REJECTED', 'APPROVED'), ir.created_at DESC
+     LIMIT 250`,
+    values,
+  );
+  return rows.map((row) => ({
+    ...row,
+    id: Number(row.id),
+    cartonId: Number(row.cartonId),
+    createdBy: Number(row.createdBy),
+    supervisorUserId: row.supervisorUserId === null ? null : Number(row.supervisorUserId),
+    reviewVersion: Number(row.reviewVersion),
+    dossierDamaged: Boolean(row.dossierDamaged),
+    hasDifficulty: Boolean(row.hasDifficulty),
+  }));
+}
+
+export async function approveInventoryRecord(
+  id: number,
+  user: AuthUser,
+  input: { signatureDataUrl: string; consent: boolean; comment?: string },
+) {
+  if (user.role !== "superviseur") throw forbidden();
+  const { signature, hash } = decodePngSignature(input.signatureDataUrl);
+  const connection = await getPool().getConnection();
+  try {
+    await connection.beginTransaction();
+    await assertFreshInventorySignature(connection, user.id, "supervisor", hash);
+    const [rows] = await connection.execute<ReviewLockRow[]>(
+      `SELECT id, created_by AS createdBy, supervisor_user_id AS supervisorUserId,
+              review_status AS reviewStatus
+       FROM inventory_records WHERE id = ? FOR UPDATE`,
+      [id],
+    );
+    const record = rows[0];
+    if (!record) throw notFound("Fiche d'inventaire introuvable.");
+    if (Number(record.supervisorUserId) !== user.id) throw forbidden("Cette fiche appartient à une autre équipe.");
+    if (record.reviewStatus !== "PENDING_SUPERVISOR") {
+      throw conflict("Seule une fiche en attente peut être approuvée.");
+    }
+    await connection.execute(
+      `UPDATE inventory_records SET
+         review_status = 'APPROVED', supervisor_signature = ?, supervisor_signature_sha256 = ?,
+         supervisor_signed_at = CURRENT_TIMESTAMP, supervisor_comment = ?, rejection_reason = NULL,
+         rejected_at = NULL
+       WHERE id = ?`,
+      [signature, hash, input.comment ?? null, id],
+    );
+    await addReviewEvent(connection, id, user.id, "SUPERVISOR_APPROVED", { signatureHash: hash });
+    await connection.commit();
+    return await getInventoryRecordById(id, user);
+  } catch (error) {
+    await connection.rollback();
+    if (isSignatureDuplicate(error)) {
+      throw conflict("Cette signature a déjà été utilisée. Tracez une nouvelle signature pour cette fiche.");
+    }
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+export async function rejectInventoryRecord(id: number, user: AuthUser, reason: string) {
+  if (user.role !== "superviseur") throw forbidden();
+  const connection = await getPool().getConnection();
+  try {
+    await connection.beginTransaction();
+    const [rows] = await connection.execute<ReviewLockRow[]>(
+      `SELECT id, created_by AS createdBy, supervisor_user_id AS supervisorUserId,
+              review_status AS reviewStatus
+       FROM inventory_records WHERE id = ? FOR UPDATE`,
+      [id],
+    );
+    const record = rows[0];
+    if (!record) throw notFound("Fiche d'inventaire introuvable.");
+    if (Number(record.supervisorUserId) !== user.id) throw forbidden("Cette fiche appartient à une autre équipe.");
+    if (record.reviewStatus !== "PENDING_SUPERVISOR") {
+      throw conflict("Seule une fiche en attente peut être rejetée.");
+    }
+    await connection.execute(
+      `UPDATE inventory_records SET
+         review_status = 'REJECTED', rejection_reason = ?, rejected_at = CURRENT_TIMESTAMP,
+         supervisor_signature = NULL, supervisor_signature_sha256 = NULL,
+         supervisor_signed_at = NULL, supervisor_comment = NULL
+       WHERE id = ?`,
+      [reason, id],
+    );
+    await addReviewEvent(connection, id, user.id, "SUPERVISOR_REJECTED", { reason });
+    await connection.commit();
+    return await getInventoryRecordById(id, user);
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+export async function resubmitInventoryRecord(id: number, input: ResubmitInventoryInput, user: AuthUser) {
+  if (user.role !== "agent") throw forbidden();
+  await assertCaseNatureMatchesAgentDirection(input.caseNature, user);
+  const { signature, hash } = decodePngSignature(input.signatureDataUrl);
+  const connection = await getPool().getConnection();
+  try {
+    await connection.beginTransaction();
+    const team = await getReviewTeam(connection, user.id);
+    await assertFreshInventorySignature(connection, user.id, "agent", hash);
+    const [rows] = await connection.execute<ReviewLockRow[]>(
+      `SELECT id, created_by AS createdBy, supervisor_user_id AS supervisorUserId,
+              review_status AS reviewStatus
+       FROM inventory_records WHERE id = ? FOR UPDATE`,
+      [id],
+    );
+    const record = rows[0];
+    if (!record) throw notFound("Fiche d'inventaire introuvable.");
+    if (Number(record.createdBy) !== user.id) throw forbidden("Cette fiche appartient à un autre agent.");
+    if (record.reviewStatus !== "REJECTED") throw conflict("Seule une fiche rejetée peut être corrigée puis renvoyée.");
+
+    await connection.execute(
+      `UPDATE inventory_records SET
+         guichet_number = ?, ddu_number = ?, classification_reference = ?, ilot_number = ?,
+         lot_number = ?, surface_area = ?, land_title_number = ?, housing_estate = ?, commune = ?,
+         case_nature = ?, last_name = ?, first_names = ?, address = ?, phone = ?, email = ?,
+         contact_person = ?, contact_mobile = ?, dossier_damaged = ?, dossier_damage_note = ?,
+         has_difficulty = ?, difficulty_note = ?, supervisor_user_id = ?,
+         review_status = 'PENDING_SUPERVISOR', review_version = review_version + 1,
+         agent_signature = ?, agent_signature_sha256 = ?, agent_signed_at = CURRENT_TIMESTAMP,
+         supervisor_signature = NULL, supervisor_signature_sha256 = NULL,
+         supervisor_signed_at = NULL, supervisor_comment = NULL, rejection_reason = NULL, rejected_at = NULL
+       WHERE id = ?`,
+      [
+        input.guichetNumber ?? null,
+        input.dduNumber ?? null,
+        input.classificationReference ?? null,
+        input.ilotNumber ?? null,
+        input.lotNumber ?? null,
+        input.surfaceArea ?? null,
+        input.landTitleNumber ?? null,
+        input.housingEstate ?? null,
+        input.commune ?? null,
+        input.caseNature,
+        input.lastName ?? null,
+        input.firstNames ?? null,
+        input.address ?? null,
+        input.phone ?? null,
+        input.email ?? null,
+        input.contactPerson ?? null,
+        input.contactMobile ?? null,
+        input.dossierDamaged,
+        input.dossierDamageNote ?? null,
+        input.hasDifficulty,
+        input.difficultyNote ?? null,
+        team.supervisorUserId,
+        signature,
+        hash,
+        id,
+      ],
+    );
+    await addReviewEvent(connection, id, user.id, "AGENT_RESUBMITTED", {
+      signatureHash: hash,
+      teamId: team.teamId,
+      supervisorUserId: team.supervisorUserId,
+    });
+    await connection.commit();
+    return await getInventoryRecordById(id, user);
+  } catch (error) {
+    await connection.rollback();
+    if (isSignatureDuplicate(error)) {
+      throw conflict("Cette signature a déjà été utilisée. Tracez une nouvelle signature pour cette fiche.");
+    }
     throw error;
   } finally {
     connection.release();

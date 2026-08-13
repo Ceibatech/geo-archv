@@ -42,10 +42,16 @@ export function AppShell({
           { key: "fiches", href: "/inventaire/mes-fiches", symbol: "FI", label: "Mes fiches" },
           { key: "rapports", href: "/rapports", symbol: "RP", label: "Rapport journalier" },
         ]
-      : [
-          { key: "dashboard", href: "/dashboard", symbol: "TB", label: "Tableau de bord" },
-          { key: "rapports", href: "/rapports", symbol: "RP", label: "Rapports signés" },
-        ];
+      : user.role === "superviseur"
+        ? [
+            { key: "dashboard", href: "/dashboard", symbol: "TB", label: "Tableau de bord" },
+            { key: "fiches", href: "/supervision/fiches", symbol: "FI", label: "Fiches à valider" },
+            { key: "rapports", href: "/rapports", symbol: "RP", label: "Rapports signés" },
+          ]
+        : [
+            { key: "dashboard", href: "/dashboard", symbol: "TB", label: "Tableau de bord" },
+            { key: "rapports", href: "/rapports", symbol: "RP", label: "Rapports signés" },
+          ];
   const initials = `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`.toUpperCase();
 
   return (

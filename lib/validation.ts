@@ -193,6 +193,19 @@ export const updateInventorySchema = z
   .omit({ cartonId: true, carton: true, clientRequestId: true, closeCarton: true })
   .superRefine(validateInventoryDetails);
 
+const signatureDataUrl = z
+  .string()
+  .max(500_000, "La signature est trop volumineuse.")
+  .regex(/^data:image\/png;base64,[A-Za-z0-9+/=]+$/, "La signature doit être une image PNG valide.");
+
+const electronicVisaSchema = z.object({
+  signatureDataUrl,
+  consent: z.boolean().refine(Boolean, "Vous devez confirmer votre visa électronique."),
+});
+
+export const inventorySubmissionSchema = createInventorySchema.and(electronicVisaSchema);
+export const inventoryResubmissionSchema = updateInventorySchema.and(electronicVisaSchema);
+
 export const inventoryListQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
@@ -202,11 +215,6 @@ export const inventoryListQuerySchema = z.object({
 export const dashboardQuerySchema = z.object({
   period: z.enum(["day", "week", "month"]).default("day"),
 });
-
-const signatureDataUrl = z
-  .string()
-  .max(500_000, "La signature est trop volumineuse.")
-  .regex(/^data:image\/png;base64,[A-Za-z0-9+/=]+$/, "La signature doit être une image PNG valide.");
 
 export const reportSignatureSchema = z.object({
   signatureDataUrl,

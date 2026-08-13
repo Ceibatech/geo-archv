@@ -39,6 +39,7 @@ export type AuthUser = {
 };
 
 export type CartonStatus = "OPEN" | "CLOSED";
+export type InventoryReviewStatus = "PENDING_SUPERVISOR" | "APPROVED" | "REJECTED";
 export type DailyReportStatus = "PENDING_SUPERVISOR" | "APPROVED" | "REJECTED";
 export type DailyReportEmailStatus = "NOT_SENT" | "SENT" | "FAILED";
 
@@ -120,4 +121,21 @@ export type InventoryRecordListItem = {
   inventoryDate: string;
   agentCode: string | null;
   agentName: string;
+  supervisorUserId: number | null;
+  supervisorName: string | null;
+  reviewStatus: InventoryReviewStatus;
+  reviewVersion: number;
+  agentSignatureSha256: string | null;
+  agentSignedAt: string | null;
+  supervisorSignatureSha256: string | null;
+  supervisorSignedAt: string | null;
+  supervisorComment: string | null;
+  rejectionReason: string | null;
+};
+
+export type InventoryRecordReview = InventoryRecordListItem & {
+  dossierDamageNote: string | null;
+  hasDifficulty: boolean;
+  difficultyNote: string | null;
+  createdAt: string;
 };

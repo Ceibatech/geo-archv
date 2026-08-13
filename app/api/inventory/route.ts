@@ -1,6 +1,6 @@
 import { apiError, assertSameOrigin, readJson } from "@/lib/api";
 import { requireApiUser } from "@/lib/auth";
-import { createInventorySchema, inventoryListQuerySchema } from "@/lib/validation";
+import { inventoryListQuerySchema, inventorySubmissionSchema } from "@/lib/validation";
 import { createInventoryRecord, listInventoryRecords } from "@/services/inventory-service";
 
 export async function GET(request: Request) {
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
   try {
     assertSameOrigin(request);
     const user = await requireApiUser(["agent"]);
-    const input = createInventorySchema.parse(await readJson(request));
+    const input = inventorySubmissionSchema.parse(await readJson(request));
     const result = await createInventoryRecord(input, user);
     return Response.json(result, { status: result.duplicate ? 200 : 201 });
   } catch (error) {

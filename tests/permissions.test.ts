@@ -14,6 +14,7 @@ describe("contrôle des rôles", () => {
   it("limite le superviseur au tableau de bord de son équipe", () => {
     expect(canAccessPath("superviseur", "/dashboard")).toBe(true);
     expect(canAccessPath("superviseur", "/rapports")).toBe(true);
+    expect(canAccessPath("superviseur", "/supervision/fiches")).toBe(true);
     expect(canAccessPath("superviseur", "/inventaire")).toBe(false);
     expect(canAccessPath("superviseur", "/admin/utilisateurs")).toBe(false);
   });
@@ -21,6 +22,7 @@ describe("contrôle des rôles", () => {
   it("refuse l'administration à l'exécutif", () => {
     expect(canAccessPath("executif", "/dashboard")).toBe(true);
     expect(canAccessPath("executif", "/rapports")).toBe(true);
+    expect(canAccessPath("executif", "/supervision/fiches")).toBe(false);
     expect(canAccessPath("executif", "/admin/utilisateurs")).toBe(false);
     expect(canAccessPath("executif", "/inventaire")).toBe(false);
   });

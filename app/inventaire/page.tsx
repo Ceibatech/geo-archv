@@ -13,6 +13,12 @@ function displayDate(value: string) {
   return new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium" }).format(new Date(`${value}T00:00:00Z`));
 }
 
+const reviewLabels = {
+  PENDING_SUPERVISOR: "En attente",
+  APPROVED: "Validée",
+  REJECTED: "À corriger",
+} as const;
+
 export default async function InventoryHomePage({
   searchParams,
 }: {
@@ -85,7 +91,7 @@ export default async function InventoryHomePage({
         {recentRecords.data.length ? (
           <div className="table-wrap">
             <table className="data-table">
-              <thead><tr><th>Date</th><th>Carton</th><th>Nature</th><th>Personne</th><th>Commune</th><th>État</th></tr></thead>
+              <thead><tr><th>Date</th><th>Carton</th><th>Nature</th><th>Personne</th><th>Commune</th><th>État</th><th>Validation</th></tr></thead>
               <tbody>
                 {recentRecords.data.map((record) => (
                   <tr key={record.id}>
@@ -95,6 +101,7 @@ export default async function InventoryHomePage({
                     <td>{[record.lastName, record.firstNames].filter(Boolean).join(" ") || "—"}</td>
                     <td>{record.commune || "—"}</td>
                     <td><span className={`badge ${record.dossierDamaged ? "badge-warning" : "badge-active"}`}>{record.dossierDamaged ? "Dégradé" : "Bon état"}</span></td>
+                    <td><span className={`report-status-badge report-status-badge-${record.reviewStatus === "APPROVED" ? "approved" : record.reviewStatus === "REJECTED" ? "rejected" : "pending"}`}>{reviewLabels[record.reviewStatus]}</span></td>
                   </tr>
                 ))}
               </tbody>

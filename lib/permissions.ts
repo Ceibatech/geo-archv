@@ -3,7 +3,7 @@ import type { Role } from "../types/domain";
 const ROLE_PATHS: Record<Role, readonly string[]> = {
   admin: ["/admin"],
   agent: ["/dashboard", "/inventaire", "/rapports"],
-  superviseur: ["/dashboard", "/rapports"],
+  superviseur: ["/dashboard", "/rapports", "/supervision"],
   executif: ["/dashboard", "/rapports"],
 };
 

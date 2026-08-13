@@ -13,6 +13,12 @@ function pageHref(page: number, search?: string) {
   return `/inventaire/mes-fiches?${params}`;
 }
 
+const reviewLabels = {
+  PENDING_SUPERVISOR: "En attente du superviseur",
+  APPROVED: "Validée et signée",
+  REJECTED: "Correction demandée",
+} as const;
+
 export default async function RecordsPage({
   searchParams,
 }: {
@@ -49,7 +55,7 @@ export default async function RecordsPage({
         {result.data.length ? (
           <div className="table-wrap">
             <table className="data-table">
-              <thead><tr><th>Date</th><th>Carton</th><th>Guichet / DDU</th><th>Nature</th><th>Personne</th><th>Commune</th><th>Agent</th><th>État</th></tr></thead>
+              <thead><tr><th>Date</th><th>Carton</th><th>Guichet / DDU</th><th>Nature</th><th>Personne</th><th>Commune</th><th>État</th><th>Validation</th><th>Action</th></tr></thead>
               <tbody>
                 {result.data.map((record) => (
                   <tr key={record.id}>
@@ -59,8 +65,12 @@ export default async function RecordsPage({
                     <td>{record.caseNature}</td>
                     <td>{[record.lastName, record.firstNames].filter(Boolean).join(" ") || "—"}</td>
                     <td>{record.commune || "—"}</td>
-                    <td>{record.agentCode || record.agentName}</td>
                     <td><span className={`badge ${record.dossierDamaged ? "badge-warning" : "badge-active"}`}>{record.dossierDamaged ? "Dégradé" : "Bon état"}</span></td>
+                    <td>
+                      <span className={`report-status-badge report-status-badge-${record.reviewStatus === "APPROVED" ? "approved" : record.reviewStatus === "REJECTED" ? "rejected" : "pending"}`}>{reviewLabels[record.reviewStatus]}</span>
+                      {record.rejectionReason ? <p className="inventory-rejection-reason">{record.rejectionReason}</p> : null}
+                    </td>
+                    <td>{record.reviewStatus === "REJECTED" ? <Link className="button button-secondary button-compact" href={`/inventaire/mes-fiches/${record.id}`}>Corriger et signer</Link> : "—"}</td>
                   </tr>
                 ))}
               </tbody>
