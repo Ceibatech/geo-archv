@@ -11,11 +11,17 @@ const dossier = {
   closeCarton: false,
 };
 
+const nouveauCarton = {
+  libelle: "Carton ACD 2026",
+  barcode: "BC-001",
+  cartonDamaged: false,
+};
+
 describe("validation de la fiche simplifiée", () => {
   it("accepte une fiche qui crée automatiquement son carton", () => {
     const result = createInventorySchema.safeParse({
       ...dossier,
-      carton: { libelle: "Carton ACD 2026", barcode: "BC-001" },
+      carton: nouveauCarton,
     });
 
     expect(result.success).toBe(true);
@@ -37,7 +43,45 @@ describe("validation de la fiche simplifiée", () => {
     const result = createInventorySchema.safeParse({
       ...dossier,
       cartonId: 42,
-      carton: { libelle: "Autre carton" },
+      carton: { ...nouveauCarton, libelle: "Autre carton" },
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("refuse de créer un carton sans choix explicite de son état", () => {
+    const result = createInventorySchema.safeParse({
+      ...dossier,
+      carton: { libelle: "Carton sans état" },
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("demande une observation lorsqu’un nouveau carton est dégradé", () => {
+    const result = createInventorySchema.safeParse({
+      ...dossier,
+      carton: { ...nouveauCarton, cartonDamaged: true },
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("accepte une commune d’Abidjan", () => {
+    const result = createInventorySchema.safeParse({
+      ...dossier,
+      cartonId: 42,
+      commune: "Yopougon",
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("refuse une commune absente de la liste d’Abidjan", () => {
+    const result = createInventorySchema.safeParse({
+      ...dossier,
+      cartonId: 42,
+      commune: "Bouaké",
     });
 
     expect(result.success).toBe(false);

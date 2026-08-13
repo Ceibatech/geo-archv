@@ -167,8 +167,15 @@ export async function createInventoryRecord(input: CreateInventoryInput, user: A
       const [cartonResult] = await connection.execute<ResultSetHeader>(
         `INSERT INTO cartons
           (carton_uid, libelle, barcode, carton_damaged, carton_damage_note, status, created_by)
-         VALUES (?, ?, ?, FALSE, NULL, 'OPEN', ?)`,
-        [temporaryUid, newCarton.libelle, newCarton.barcode ?? null, user.id],
+         VALUES (?, ?, ?, ?, ?, 'OPEN', ?)`,
+        [
+          temporaryUid,
+          newCarton.libelle,
+          newCarton.barcode ?? null,
+          newCarton.cartonDamaged,
+          newCarton.cartonDamageNote ?? null,
+          user.id,
+        ],
       );
 
       cartonId = cartonResult.insertId;

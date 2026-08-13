@@ -3,6 +3,7 @@
 import { useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
+import { ABIDJAN_COMMUNES } from "../lib/abidjan-communes";
 import type { AuthUser, Carton } from "@/types/domain";
 
 type InventoryCarton = Pick<Carton, "id" | "cartonUid" | "libelle" | "barcode" | "dossierCount">;
@@ -67,6 +68,7 @@ export function InventoryForm({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [cartonDamaged, setCartonDamaged] = useState<boolean | null>(null);
   const [dossierDamaged, setDossierDamaged] = useState(false);
   const [hasDifficulty, setHasDifficulty] = useState(false);
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
@@ -110,6 +112,13 @@ export function InventoryForm({
 
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
+    if (!carton && cartonDamaged === null) {
+      setError("Choisissez l’état du carton avant d’enregistrer la fiche.");
+      setStep(STEPS.length - 1);
+      focusStep(STEPS.length - 1);
+      return;
+    }
+
     const hasIdentifier = [
       "guichetNumber",
       "dduNumber",
@@ -141,6 +150,8 @@ export function InventoryForm({
                 carton: {
                   libelle: text(form, "cartonLibelle"),
                   barcode: text(form, "cartonBarcode"),
+                  cartonDamaged,
+                  cartonDamageNote: text(form, "cartonDamageNote"),
                 },
               }),
           clientRequestId: requestId,
@@ -346,7 +357,14 @@ export function InventoryForm({
         <div className="form-grid form-grid-3">
           <div className="field"><label htmlFor="landTitleNumber">N° Titre foncier</label><input id="landTitleNumber" name="landTitleNumber" maxLength={100} placeholder="Facultatif" /></div>
           <div className="field"><label htmlFor="housingEstate">Lotissement</label><input id="housingEstate" name="housingEstate" maxLength={191} placeholder="Facultatif" /></div>
-          <div className="field"><label htmlFor="commune">Commune(s)</label><input id="commune" name="commune" maxLength={191} placeholder="Facultatif" /></div>
+          <div className="field">
+            <label htmlFor="commune">Commune d’Abidjan</label>
+            <select id="commune" name="commune" defaultValue="">
+              <option value="">Sélectionner une commune (facultatif)</option>
+              {ABIDJAN_COMMUNES.map((commune) => <option value={commune} key={commune}>{commune}</option>)}
+            </select>
+            <p className="field-hint">Liste des dix communes d’Abidjan publiée par l’ANStat.</p>
+          </div>
         </div>
       </QuestionnaireStep>
 
@@ -396,6 +414,40 @@ export function InventoryForm({
         description="Répondez seulement si le dossier est dégradé ou si vous avez rencontré une difficulté."
       >
         <div className="form-grid">
+          {!carton ? (
+            <div className="field field-full">
+              <span className="field-label">Quel est l’état du carton ? *</span>
+              <div className="radio-group">
+                <label className="radio-option">
+                  <input
+                    type="radio"
+                    name="cartonDamaged"
+                    checked={cartonDamaged === false}
+                    onChange={() => setCartonDamaged(false)}
+                    required
+                  />
+                  Bon état
+                </label>
+                <label className="radio-option">
+                  <input
+                    type="radio"
+                    name="cartonDamaged"
+                    checked={cartonDamaged === true}
+                    onChange={() => setCartonDamaged(true)}
+                    required
+                  />
+                  Dégradé
+                </label>
+              </div>
+              <p className="field-hint">Ce choix est obligatoire avant l’enregistrement du premier dossier.</p>
+            </div>
+          ) : null}
+          {!carton && cartonDamaged ? (
+            <div className="field field-full">
+              <label htmlFor="cartonDamageNote">Observation sur la dégradation du carton *</label>
+              <textarea id="cartonDamageNote" name="cartonDamageNote" maxLength={2000} required />
+            </div>
+          ) : null}
           <div className="field">
             <span className="field-label">Le dossier est-il dégradé ?</span>
             <div className="radio-group">
@@ -439,7 +491,11 @@ export function InventoryForm({
             {step === 0 ? "Commencer" : "Continuer"} <span aria-hidden="true">→</span>
           </button>
         ) : (
-          <button className="button button-primary" type="submit" disabled={pending}>
+          <button
+            className="button button-primary"
+            type="submit"
+            disabled={pending || (!carton && cartonDamaged === null)}
+          >
             {pending ? "Enregistrement…" : "Enregistrer la fiche"}
           </button>
         )}

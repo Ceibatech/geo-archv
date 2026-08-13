@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { ABIDJAN_COMMUNES } from "./abidjan-communes";
 import { INVENTORY_DIRECTIONS, ROLES } from "../types/domain";
 
 const optionalText = (max: number) =>
@@ -88,6 +89,17 @@ const inventoryFields = {
     .object({
       libelle: z.string().trim().min(1, "Le libellé du carton est obligatoire.").max(255),
       barcode: optionalText(100),
+      cartonDamaged: z.boolean(),
+      cartonDamageNote: optionalText(2_000),
+    })
+    .superRefine((data, context) => {
+      if (data.cartonDamaged && !data.cartonDamageNote) {
+        context.addIssue({
+          code: "custom",
+          path: ["cartonDamageNote"],
+          message: "Décrivez la dégradation du carton.",
+        });
+      }
     })
     .optional(),
   clientRequestId: z.uuid(),
@@ -102,7 +114,10 @@ const inventoryFields = {
   ),
   landTitleNumber: optionalText(100),
   housingEstate: optionalText(191),
-  commune: optionalText(191),
+  commune: z.preprocess(
+    (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+    z.enum(ABIDJAN_COMMUNES, "Choisissez une commune d’Abidjan valide.").optional(),
+  ),
   caseNature: z.string().trim().min(1, "La nature du dossier est obligatoire.").max(191),
   lastName: optionalText(100),
   firstNames: optionalText(191),
