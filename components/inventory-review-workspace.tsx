@@ -70,7 +70,7 @@ function ReviewCard({ record }: { record: InventoryRecordReview }) {
   }
 
   return (
-    <article className="card supervisor-report-card inventory-review-card">
+    <article className="card supervisor-report-card inventory-review-card" id={`fiche-${record.id}`}>
       <div className="supervisor-report-heading">
         <div>
           <span>Fiche #{record.id} · {displayDate(record.agentSignedAt, true)}</span>

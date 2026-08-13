@@ -545,10 +545,24 @@ export async function updateInventoryRecord(id: number, input: UpdateInventoryIn
   }
 }
 
-export async function listInventoryReviews(user: AuthUser) {
+export async function listInventoryReviews(
+  user: AuthUser,
+  input: { status?: InventoryReviewStatus; limit?: number } = {},
+) {
   if (user.role !== "superviseur" && user.role !== "executif") throw forbidden();
-  const where = user.role === "superviseur" ? "WHERE ir.supervisor_user_id = ?" : "";
-  const values = user.role === "superviseur" ? [user.id] : [];
+  const conditions: string[] = [];
+  const values: Array<string | number> = [];
+  if (user.role === "superviseur") {
+    conditions.push("ir.supervisor_user_id = ?");
+    values.push(user.id);
+  }
+  if (input.status) {
+    conditions.push("ir.review_status = ?");
+    values.push(input.status);
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const limit = Math.max(1, Math.min(250, input.limit ?? 250));
+  values.push(limit);
   const [rows] = await getPool().execute<InventoryReviewRow[]>(
     `SELECT
        ir.id,
@@ -586,7 +600,7 @@ export async function listInventoryReviews(user: AuthUser) {
      LEFT JOIN users supervisor ON supervisor.id = ir.supervisor_user_id
      ${where}
      ORDER BY FIELD(ir.review_status, 'PENDING_SUPERVISOR', 'REJECTED', 'APPROVED'), ir.created_at DESC
-     LIMIT 250`,
+     LIMIT ?`,
     values,
   );
   return rows.map((row) => ({
@@ -599,6 +613,20 @@ export async function listInventoryReviews(user: AuthUser) {
     dossierDamaged: Boolean(row.dossierDamaged),
     hasDifficulty: Boolean(row.hasDifficulty),
   }));
+}
+
+export async function getPendingInventoryReviewSummary(user: AuthUser, limit = 8) {
+  if (user.role !== "superviseur") throw forbidden();
+  const [records, countRows] = await Promise.all([
+    listInventoryReviews(user, { status: "PENDING_SUPERVISOR", limit }),
+    getPool().execute<CountRow[]>(
+      `SELECT COUNT(*) AS total
+       FROM inventory_records
+       WHERE supervisor_user_id = ? AND review_status = 'PENDING_SUPERVISOR'`,
+      [user.id],
+    ),
+  ]);
+  return { records, total: Number(countRows[0][0]?.total ?? 0) };
 }
 
 export async function approveInventoryRecord(
