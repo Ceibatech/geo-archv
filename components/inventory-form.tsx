@@ -135,8 +135,8 @@ export function InventoryForm({
       return;
     }
 
-    if (!signature || !consent) {
-      setError("Tracez une nouvelle signature et confirmez votre visa avant de transmettre la fiche.");
+    if (signature && !consent) {
+      setError("Confirmez votre visa électronique si vous apposez une signature sur cette fiche.");
       setStep(STEPS.length - 1);
       focusStep(STEPS.length - 1);
       return;
@@ -535,15 +535,15 @@ export function InventoryForm({
         active={step === 8}
         index={8}
         title="Signez et transmettez cette fiche"
-        description="Chaque fiche exige un nouveau visa. Votre signature ne sera jamais reprise automatiquement sur la fiche suivante."
+        description="La signature de chaque fiche reste optionnelle. Le visa du point de la journée est rattaché au rapport journalier, pas à chaque dossier."
       >
         <div className="inventory-signature-step">
-          <SignaturePad key={signatureKey} label="Signature de l’agent" onChange={setSignature} />
+          <SignaturePad key={signatureKey} label="Signature de l’agent (facultative)" onChange={setSignature} />
           <label className="signature-consent">
             <input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} />
             <span>Je confirme l’exactitude des informations de cette fiche et je la transmets à mon superviseur pour approbation ou rejet.</span>
           </label>
-          <p className="field-hint">Après transmission, la fiche sera verrouillée jusqu’à la décision du superviseur.</p>
+          <p className="field-hint">Le visa électronique est facultatif pour la fiche ; le point de la journée est validé dans le rapport journalier.</p>
         </div>
       </QuestionnaireStep>
 
@@ -564,9 +564,9 @@ export function InventoryForm({
           <button
             className="button button-primary"
             type="submit"
-            disabled={pending || (!carton && cartonDamaged === null) || !signature || !consent}
+            disabled={pending || (!carton && cartonDamaged === null)}
           >
-            {pending ? "Transmission…" : "Signer et transmettre la fiche"}
+            {pending ? "Transmission…" : "Transmettre la fiche"}
           </button>
         )}
       </div>

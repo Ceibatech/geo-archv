@@ -198,10 +198,18 @@ const signatureDataUrl = z
   .max(500_000, "La signature est trop volumineuse.")
   .regex(/^data:image\/png;base64,[A-Za-z0-9+/=]+$/, "La signature doit être une image PNG valide.");
 
-const electronicVisaSchema = z.object({
-  signatureDataUrl,
-  consent: z.boolean().refine(Boolean, "Vous devez confirmer votre visa électronique."),
-});
+const electronicVisaSchema = z
+  .object({
+    signatureDataUrl: signatureDataUrl.optional(),
+    consent: z.boolean().optional(),
+  })
+  .refine(
+    (data) => !data.signatureDataUrl || data.consent === true,
+    {
+      path: ["consent"],
+      message: "Vous devez confirmer votre visa électronique si une signature est apposée.",
+    },
+  );
 
 export const inventorySubmissionSchema = createInventorySchema.and(electronicVisaSchema);
 export const inventoryResubmissionSchema = updateInventorySchema.and(electronicVisaSchema);

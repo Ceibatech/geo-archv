@@ -89,27 +89,23 @@ describe("validation de la fiche simplifiée", () => {
     expect(result.success).toBe(false);
   });
 
-  it("exige une signature et un consentement pour transmettre une nouvelle fiche", () => {
-    const unsigned = inventorySubmissionSchema.safeParse({ ...dossier, cartonId: 42 });
-    const signed = inventorySubmissionSchema.safeParse({
+  it("accepte une fiche sans signature, car la validation du point de journée se fait au niveau du rapport", () => {
+    const result = inventorySubmissionSchema.safeParse({
+      ...dossier,
+      cartonId: 42,
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("accepte une signature optionnelle si un agent choisit de l’apposer", () => {
+    const result = inventorySubmissionSchema.safeParse({
       ...dossier,
       cartonId: 42,
       signatureDataUrl: pngDataUrl,
       consent: true,
     });
 
-    expect(unsigned.success).toBe(false);
-    expect(signed.success).toBe(true);
-  });
-
-  it("refuse une signature sans consentement explicite", () => {
-    const result = inventorySubmissionSchema.safeParse({
-      ...dossier,
-      cartonId: 42,
-      signatureDataUrl: pngDataUrl,
-      consent: false,
-    });
-
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
   });
 });

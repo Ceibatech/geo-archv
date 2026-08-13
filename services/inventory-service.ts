@@ -243,9 +243,15 @@ async function getRecordByRequestId(clientRequestId: string, user: AuthUser) {
   return mapDetail(record);
 }
 
+function parseInventorySignature(input: Pick<CreateInventoryInput, "signatureDataUrl">) {
+  if (!input.signatureDataUrl) return { signature: null as Buffer | null, hash: null as string | null };
+  const { signature, hash } = decodePngSignature(input.signatureDataUrl);
+  return { signature, hash };
+}
+
 export async function createInventoryRecord(input: CreateInventoryInput, user: AuthUser) {
   await assertCaseNatureMatchesAgentDirection(input.caseNature, user);
-  const { signature, hash } = decodePngSignature(input.signatureDataUrl);
+  const { signature, hash } = parseInventorySignature(input);
   const connection = await getPool().getConnection();
   try {
     await connection.beginTransaction();
@@ -260,7 +266,9 @@ export async function createInventoryRecord(input: CreateInventoryInput, user: A
     }
 
     const team = await getReviewTeam(connection, user.id);
-    await assertFreshInventorySignature(connection, user.id, "agent", hash);
+    if (hash) {
+      await assertFreshInventorySignature(connection, user.id, "agent", hash);
+    }
 
     let cartonId = input.cartonId;
 
@@ -325,7 +333,7 @@ export async function createInventoryRecord(input: CreateInventoryInput, user: A
         contact_mobile, dossier_damaged, dossier_damage_note, has_difficulty,
         difficulty_note, inventory_date, created_by, supervisor_user_id, review_status,
         review_version, agent_signature, agent_signature_sha256, agent_signed_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING_SUPERVISOR', 1, ?, ?, CURRENT_TIMESTAMP)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING_SUPERVISOR', 1, ?, ?, ${hash ? "CURRENT_TIMESTAMP" : "NULL"})`,
       [
         cartonId,
         input.clientRequestId,
@@ -358,8 +366,8 @@ export async function createInventoryRecord(input: CreateInventoryInput, user: A
       ],
     );
 
-    await addReviewEvent(connection, result.insertId, user.id, "AGENT_SIGNED", {
-      signatureHash: hash,
+    await addReviewEvent(connection, result.insertId, user.id, hash ? "AGENT_SIGNED" : "AGENT_SUBMITTED", {
+      ...(hash ? { signatureHash: hash } : {}),
       teamId: team.teamId,
       supervisorUserId: team.supervisorUserId,
     });
@@ -713,12 +721,14 @@ export async function rejectInventoryRecord(id: number, user: AuthUser, reason: 
 export async function resubmitInventoryRecord(id: number, input: ResubmitInventoryInput, user: AuthUser) {
   if (user.role !== "agent") throw forbidden();
   await assertCaseNatureMatchesAgentDirection(input.caseNature, user);
-  const { signature, hash } = decodePngSignature(input.signatureDataUrl);
+  const { signature, hash } = parseInventorySignature(input);
   const connection = await getPool().getConnection();
   try {
     await connection.beginTransaction();
     const team = await getReviewTeam(connection, user.id);
-    await assertFreshInventorySignature(connection, user.id, "agent", hash);
+    if (hash) {
+      await assertFreshInventorySignature(connection, user.id, "agent", hash);
+    }
     const [rows] = await connection.execute<ReviewLockRow[]>(
       `SELECT id, created_by AS createdBy, supervisor_user_id AS supervisorUserId,
               review_status AS reviewStatus
@@ -738,7 +748,7 @@ export async function resubmitInventoryRecord(id: number, input: ResubmitInvento
          contact_person = ?, contact_mobile = ?, dossier_damaged = ?, dossier_damage_note = ?,
          has_difficulty = ?, difficulty_note = ?, supervisor_user_id = ?,
          review_status = 'PENDING_SUPERVISOR', review_version = review_version + 1,
-         agent_signature = ?, agent_signature_sha256 = ?, agent_signed_at = CURRENT_TIMESTAMP,
+         agent_signature = ?, agent_signature_sha256 = ?, agent_signed_at = ${hash ? "CURRENT_TIMESTAMP" : "NULL"},
          supervisor_signature = NULL, supervisor_signature_sha256 = NULL,
          supervisor_signed_at = NULL, supervisor_comment = NULL, rejection_reason = NULL, rejected_at = NULL
        WHERE id = ?`,
@@ -770,8 +780,8 @@ export async function resubmitInventoryRecord(id: number, input: ResubmitInvento
         id,
       ],
     );
-    await addReviewEvent(connection, id, user.id, "AGENT_RESUBMITTED", {
-      signatureHash: hash,
+    await addReviewEvent(connection, id, user.id, hash ? "AGENT_RESUBMITTED" : "AGENT_RECORRECTED", {
+      ...(hash ? { signatureHash: hash } : {}),
       teamId: team.teamId,
       supervisorUserId: team.supervisorUserId,
     });
