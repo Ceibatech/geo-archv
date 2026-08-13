@@ -19,7 +19,7 @@ function resendConfiguration() {
   if (!fromEmail) throw new Error("RESEND_FROM_EMAIL n'est pas configurée.");
   return {
     client: new Resend(apiKey),
-    from: fromEmail.includes("<") ? fromEmail : `Archives CG1020 <${fromEmail}>`,
+    from: fromEmail.includes("<") ? fromEmail : `CEIBA Analytics - Archives CG1020 <${fromEmail}>`,
     appUrl: process.env.APP_URL?.trim() || "http://localhost:3000",
   };
 }
@@ -47,7 +47,7 @@ export async function sendApprovedDailyReport(id: number, actorUserId: number, f
       {
         from,
         to: recipients,
-        subject: `Rapport journalier CG1020 validé - ${report.agentName} - ${report.reportDate}`,
+        subject: `[CG1020] Rapport journalier approuvé - ${report.agentName} - ${report.reportDate}`,
         html: dailyReportApprovedEmail(report, appUrl),
         attachments: [
           {
