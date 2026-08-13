@@ -17,17 +17,28 @@ export function SignaturePad({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ratio = Math.min(window.devicePixelRatio || 1, 2);
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = Math.max(1, Math.round(rect.width * ratio));
-    canvas.height = Math.max(1, Math.round(rect.height * ratio));
-    const context = canvas.getContext("2d");
-    if (!context) return;
-    context.scale(ratio, ratio);
-    context.lineCap = "round";
-    context.lineJoin = "round";
-    context.lineWidth = 2.4;
-    context.strokeStyle = "#0a2542";
+
+    const syncCanvas = () => {
+      const ratio = Math.min(window.devicePixelRatio || 1, 2);
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = Math.max(1, Math.round(rect.width * ratio));
+      canvas.height = Math.max(1, Math.round(rect.height * ratio));
+      const context = canvas.getContext("2d");
+      if (!context) return;
+      context.setTransform(1, 0, 0, 1, 0, 0);
+      context.scale(ratio, ratio);
+      context.lineCap = "round";
+      context.lineJoin = "round";
+      context.lineWidth = 2.4;
+      context.strokeStyle = "#0a2542";
+      context.fillStyle = "#0a2542";
+    };
+
+    syncCanvas();
+    const observer = new ResizeObserver(syncCanvas);
+    observer.observe(canvas);
+
+    return () => observer.disconnect();
   }, []);
 
   function point(event: React.PointerEvent<HTMLCanvasElement>) {
@@ -37,6 +48,7 @@ export function SignaturePad({
   }
 
   function start(event: React.PointerEvent<HTMLCanvasElement>) {
+    event.preventDefault();
     const context = event.currentTarget.getContext("2d");
     if (!context) return;
     const position = point(event);
@@ -44,6 +56,10 @@ export function SignaturePad({
     drawingRef.current = true;
     context.beginPath();
     context.moveTo(position.x, position.y);
+    context.lineTo(position.x, position.y);
+    context.stroke();
+    inkRef.current = true;
+    setHasInk(true);
   }
 
   function move(event: React.PointerEvent<HTMLCanvasElement>) {
@@ -62,15 +78,31 @@ export function SignaturePad({
     drawingRef.current = false;
     const context = event.currentTarget.getContext("2d");
     context?.closePath();
-    if (inkRef.current) {
-      onChange(event.currentTarget.toDataURL("image/png"));
+    if (!inkRef.current) {
+      onChange(null);
+      setHasInk(false);
+      return;
     }
+
+    const dataUrl = event.currentTarget.toDataURL("image/png");
+    if (dataUrl.length <= "data:image/png;base64,".length + 32) {
+      inkRef.current = false;
+      setHasInk(false);
+      onChange(null);
+      return;
+    }
+
+    onChange(dataUrl);
   }
 
   function clear() {
     const canvas = canvasRef.current;
     const context = canvas?.getContext("2d");
-    if (canvas && context) context.clearRect(0, 0, canvas.width, canvas.height);
+    if (canvas && context) {
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      context.beginPath();
+    }
+    drawingRef.current = false;
     inkRef.current = false;
     setHasInk(false);
     onChange(null);
@@ -92,6 +124,7 @@ export function SignaturePad({
         onPointerDown={start}
         onPointerMove={move}
         onPointerUp={finish}
+        onPointerLeave={finish}
         onPointerCancel={finish}
       />
       <div className="signature-line"><span>{hasInk ? "Signature prête" : "Tracez votre signature au-dessus"}</span></div>
