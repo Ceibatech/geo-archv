@@ -56,7 +56,7 @@ export function LoginForm() {
             autoComplete="username"
             autoCapitalize="none"
             spellCheck={false}
-            placeholder="Ex. akone ou awa@ceibac.ci"
+            placeholder="Ex. akone ou awa@ceiba-analytics.com"
             required
             autoFocus
           />
