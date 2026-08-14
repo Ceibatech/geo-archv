@@ -3,7 +3,6 @@
 import { useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
-import { SignaturePad } from "./signature-pad";
 import { ABIDJAN_COMMUNES } from "../lib/abidjan-communes";
 import {
   CUSTOM_CASE_NATURE_OPTION,
@@ -84,8 +83,6 @@ export function InventoryForm({
   const [hasDifficulty, setHasDifficulty] = useState(false);
   const [caseNatureSelection, setCaseNatureSelection] = useState("");
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
-  const [signature, setSignature] = useState<string | null>(null);
-  const [signatureKey, setSignatureKey] = useState(0);
   const [consent, setConsent] = useState(false);
   const caseNatures = getCaseNaturesForDirection(direction);
 
@@ -135,8 +132,8 @@ export function InventoryForm({
       return;
     }
 
-    if (signature && !consent) {
-      setError("Confirmez votre visa électronique si vous apposez une signature sur cette fiche.");
+    if (!consent) {
+      setError("Confirmez l’exactitude de cette fiche avant de la transmettre.");
       setStep(STEPS.length - 1);
       focusStep(STEPS.length - 1);
       return;
@@ -204,7 +201,6 @@ export function InventoryForm({
           hasDifficulty,
           difficultyNote: text(form, "difficultyNote"),
           closeCarton: false,
-          signatureDataUrl: signature,
           consent,
         }),
       });
@@ -222,10 +218,8 @@ export function InventoryForm({
       setHasDifficulty(false);
       setCaseNatureSelection("");
       setRequestId(crypto.randomUUID());
-      setSignature(null);
       setConsent(false);
-      setSignatureKey((value) => value + 1);
-      setSuccess("Fiche signée et transmise au superviseur. Le questionnaire est prêt pour le dossier suivant.");
+      setSuccess("Fiche transmise au superviseur. Le questionnaire est prêt pour le dossier suivant.");
       setPending(false);
       setStep(1);
       router.refresh();
@@ -534,16 +528,15 @@ export function InventoryForm({
       <QuestionnaireStep
         active={step === 8}
         index={8}
-        title="Signez et transmettez cette fiche"
-        description="La signature de chaque fiche reste optionnelle. Le visa du point de la journée est rattaché au rapport journalier, pas à chaque dossier."
+        title="Validez et transmettez cette fiche"
+        description="La signature de chaque fiche a été retirée. Le visa du point de la journée est rattaché au rapport journalier, pas à chaque dossier."
       >
         <div className="inventory-signature-step">
-          <SignaturePad key={signatureKey} label="Signature de l’agent (facultative)" onChange={setSignature} />
           <label className="signature-consent">
             <input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} />
             <span>Je confirme l’exactitude des informations de cette fiche et je la transmets à mon superviseur pour approbation ou rejet.</span>
           </label>
-          <p className="field-hint">Le visa électronique est facultatif pour la fiche ; le point de la journée est validé dans le rapport journalier.</p>
+          <p className="field-hint">La transmission ne dépend plus d’une signature de fiche ; le point de la journée est validé dans le rapport journalier.</p>
         </div>
       </QuestionnaireStep>
 
@@ -564,7 +557,7 @@ export function InventoryForm({
           <button
             className="button button-primary"
             type="submit"
-            disabled={pending || (!carton && cartonDamaged === null)}
+            disabled={pending || (!carton && cartonDamaged === null) || !consent}
           >
             {pending ? "Transmission…" : "Transmettre la fiche"}
           </button>

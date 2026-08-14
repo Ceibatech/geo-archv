@@ -3,7 +3,6 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
-import { SignaturePad } from "@/components/signature-pad";
 import { ABIDJAN_COMMUNES } from "@/lib/abidjan-communes";
 import {
   CUSTOM_CASE_NATURE_OPTION,
@@ -51,15 +50,14 @@ export function InventoryCorrectionForm({ record, direction }: { record: Invento
   const [caseNatureSelection, setCaseNatureSelection] = useState(initialNature);
   const [dossierDamaged, setDossierDamaged] = useState(record.dossierDamaged);
   const [hasDifficulty, setHasDifficulty] = useState(record.hasDifficulty);
-  const [signature, setSignature] = useState<string | null>(null);
   const [consent, setConsent] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (signature && !consent) {
-      setError("Confirmez votre visa électronique si vous apposez une signature sur cette fiche.");
+    if (!consent) {
+      setError("Confirmez la correction avant de renvoyer cette fiche.");
       return;
     }
     if (pending) return;
@@ -92,7 +90,6 @@ export function InventoryCorrectionForm({ record, direction }: { record: Invento
           dossierDamageNote: text(form, "dossierDamageNote"),
           hasDifficulty,
           difficultyNote: text(form, "difficultyNote"),
-          signatureDataUrl: signature,
           consent,
         }),
       });
@@ -111,7 +108,7 @@ export function InventoryCorrectionForm({ record, direction }: { record: Invento
       <div className="message message-error">
         <strong>Motif du rejet :</strong> {record.rejectionReason || "Correction demandée par le superviseur."}
       </div>
-      <div className="card-header"><div><h2>Corriger la fiche {record.cartonUid}</h2><span className="field-hint">Version actuelle V{record.reviewVersion}. Le visa agent de la fiche reste optionnel ; le rapport journalier garde le point de signature de la journée.</span></div></div>
+      <div className="card-header"><div><h2>Corriger la fiche {record.cartonUid}</h2><span className="field-hint">Version actuelle V{record.reviewVersion}. La signature de la fiche est retirée ; le point de la journée est validé dans le rapport journalier.</span></div></div>
       <div className="card-body inventory-correction-body">
         <div className="form-grid form-grid-3">
           <div className="field"><label htmlFor="guichetNumber">N° Guichet</label><input id="guichetNumber" name="guichetNumber" defaultValue={record.guichetNumber ?? ""} maxLength={100} /></div>
@@ -140,11 +137,10 @@ export function InventoryCorrectionForm({ record, direction }: { record: Invento
           {hasDifficulty ? <div className="field"><label htmlFor="difficultyNote">Description de la difficulté *</label><textarea id="difficultyNote" name="difficultyNote" defaultValue={record.difficultyNote ?? ""} maxLength={4000} required /></div> : null}
         </div>
         <div className="inventory-correction-signature">
-          <SignaturePad label="Nouvelle signature de l’agent (facultative)" onChange={setSignature} />
           <label className="signature-consent"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} /><span>Je confirme mes corrections et je renvoie cette fiche à mon superviseur.</span></label>
         </div>
         {error ? <p className="message message-error" role="alert">{error}</p> : null}
-        <button className="button button-primary button-block" type="submit" disabled={pending}>{pending ? "Renvoi…" : "Renvoyer au superviseur"}</button>
+        <button className="button button-primary button-block" type="submit" disabled={!consent || pending}>{pending ? "Renvoi…" : "Renvoyer au superviseur"}</button>
       </div>
     </form>
   );
