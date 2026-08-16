@@ -79,11 +79,21 @@ describe("validation de la fiche simplifiée", () => {
     expect(result.success).toBe(true);
   });
 
-  it("refuse une commune absente de la liste d’Abidjan", () => {
+  it("accepte une ville hors Abidjan si elle figure dans la liste", () => {
     const result = createInventorySchema.safeParse({
       ...dossier,
       cartonId: 42,
       commune: "Bouaké",
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("refuse une commune absente de la liste autorisée", () => {
+    const result = createInventorySchema.safeParse({
+      ...dossier,
+      cartonId: 42,
+      commune: "Katiola",
     });
 
     expect(result.success).toBe(false);

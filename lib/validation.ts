@@ -116,7 +116,7 @@ const inventoryFields = {
   housingEstate: optionalText(191),
   commune: z.preprocess(
     (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
-    z.enum(ABIDJAN_COMMUNES, "Choisissez une commune d’Abidjan valide.").optional(),
+    z.enum(ABIDJAN_COMMUNES, "Choisissez une commune ou ville valide.").optional(),
   ),
   caseNature: z.string().trim().min(1, "La nature du dossier est obligatoire.").max(191),
   lastName: optionalText(100),

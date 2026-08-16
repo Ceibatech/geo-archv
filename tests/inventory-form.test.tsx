@@ -16,16 +16,16 @@ const operator = {
 };
 
 describe("questionnaire d’inventaire agent", () => {
-  it("demande explicitement l’état du nouveau carton avant l’enregistrement", () => {
+  it("demande explicitement l’état du dossier avant l’enregistrement", () => {
     const markup = renderToStaticMarkup(<InventoryForm carton={null} operator={operator} direction="DDU" />);
 
-    expect(markup).toContain("Quel est l’état du carton ?");
+    expect(markup).toContain("État du dossier");
     expect(markup).toContain("Bon état");
     expect(markup).toContain("Dégradé");
     expect(markup).toContain('type="radio" required="" name="cartonDamaged"');
   });
 
-  it("affiche les dix communes d’Abidjan dans une liste déroulante", () => {
+  it("affiche les communes et villes disponibles dans la liste déroulante", () => {
     const markup = renderToStaticMarkup(<InventoryForm carton={null} operator={operator} direction="DDU" />);
 
     expect(markup).toContain('<select id="commune" name="commune">');
