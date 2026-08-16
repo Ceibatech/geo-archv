@@ -25,6 +25,13 @@ describe("questionnaire d’inventaire agent", () => {
     expect(markup).toContain('type="radio" required="" name="cartonDamaged"');
   });
 
+  it("affiche un champ de recherche rapide pour filtrer la liste des communes", () => {
+    const markup = renderToStaticMarkup(<InventoryForm carton={null} operator={operator} direction="DDU" />);
+
+    expect(markup).toContain('placeholder="Rechercher une commune ou ville"');
+    expect(markup).toContain('<select id="commune" name="commune">');
+  });
+
   it("affiche les communes et villes disponibles dans la liste déroulante", () => {
     const markup = renderToStaticMarkup(<InventoryForm carton={null} operator={operator} direction="DDU" />);
 

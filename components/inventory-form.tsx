@@ -82,9 +82,14 @@ export function InventoryForm({
   const [dossierDamaged, setDossierDamaged] = useState(false);
   const [hasDifficulty, setHasDifficulty] = useState(false);
   const [caseNatureSelection, setCaseNatureSelection] = useState("");
+  const [communeSearch, setCommuneSearch] = useState("");
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
   const [consent, setConsent] = useState(false);
   const caseNatures = getCaseNaturesForDirection(direction);
+  const normalizedCommuneSearch = communeSearch.trim().toLowerCase();
+  const filteredCommunes = normalizedCommuneSearch
+    ? ABIDJAN_COMMUNES.filter((commune) => commune.toLowerCase().includes(normalizedCommuneSearch))
+    : ABIDJAN_COMMUNES;
 
   function focusStep(nextStep: number) {
     requestAnimationFrame(() => {
@@ -384,12 +389,25 @@ export function InventoryForm({
           <div className="field"><label htmlFor="landTitleNumber">N° Titre foncier</label><input id="landTitleNumber" name="landTitleNumber" maxLength={100} /></div>
           <div className="field"><label htmlFor="housingEstate">Lotissement</label><input id="housingEstate" name="housingEstate" maxLength={191} /></div>
           <div className="field">
+            <label htmlFor="communeSearch">Recherche rapide</label>
+            <input
+              id="communeSearch"
+              type="search"
+              value={communeSearch}
+              onChange={(event) => setCommuneSearch(event.target.value)}
+              placeholder="Rechercher une commune ou ville"
+              autoComplete="off"
+            />
             <label htmlFor="commune">Commune / Ville</label>
             <select id="commune" name="commune" defaultValue="">
               <option value="">Sélectionner une commune / ville (facultatif)</option>
-              {ABIDJAN_COMMUNES.map((commune) => <option value={commune} key={commune}>{commune}</option>)}
+              {filteredCommunes.map((commune) => <option value={commune} key={commune}>{commune}</option>)}
             </select>
-            <p className="field-hint">Sélectionnez la commune ou la ville si elle est indiquée sur le dossier.</p>
+            <p className="field-hint">
+              {filteredCommunes.length === 0
+                ? "Aucune commune ne correspond à cette recherche."
+                : `Affichage de ${filteredCommunes.length} commune${filteredCommunes.length > 1 ? "s" : ""}.`}
+            </p>
           </div>
         </div>
       </QuestionnaireStep>
