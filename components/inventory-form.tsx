@@ -435,9 +435,9 @@ export function InventoryForm({
         description="Recopiez l’identité et l’adresse de l’acquéreur figurant dans le dossier."
       >
         <div className="form-grid">
-          <div className="field"><label htmlFor="lastName">Nom</label><input id="lastName" name="lastName" maxLength={100} placeholder="Facultatif" /></div>
-          <div className="field"><label htmlFor="firstNames">Prénoms</label><input id="firstNames" name="firstNames" maxLength={191} placeholder="Facultatif" /></div>
-          <div className="field field-full"><label htmlFor="address">Adresse</label><textarea id="address" name="address" maxLength={2000} placeholder="Facultatif" /></div>
+          <div className="field"><label htmlFor="lastName">Nom</label><input id="lastName" name="lastName" maxLength={100} /></div>
+          <div className="field"><label htmlFor="firstNames">Prénoms</label><input id="firstNames" name="firstNames" maxLength={191} /></div>
+          <div className="field field-full"><label htmlFor="address">Adresse</label><textarea id="address" name="address" maxLength={2000} /></div>
         </div>
       </QuestionnaireStep>
 
@@ -448,17 +448,17 @@ export function InventoryForm({
         description="Ces informations sont facultatives."
       >
         <div className="form-grid">
-          <div className="field"><label htmlFor="phone">Téléphone</label><input id="phone" name="phone" type="tel" maxLength={50} placeholder="Téléphone" /></div>
-          <div className="field"><label htmlFor="email">E-mail</label><input id="email" name="email" type="email" maxLength={191} placeholder="E-mail" /></div>
-          <div className="field"><label htmlFor="contactPerson">Autre personne à contacter</label><input id="contactPerson" name="contactPerson" maxLength={191} placeholder="Autre personne à contacter" /></div>
-          <div className="field"><label htmlFor="contactMobile">Mobile</label><input id="contactMobile" name="contactMobile" type="tel" maxLength={50} placeholder="Mobile" /></div>
+          <div className="field"><label htmlFor="phone">Téléphone</label><input id="phone" name="phone" type="tel" maxLength={50} /></div>
+          <div className="field"><label htmlFor="email">E-mail</label><input id="email" name="email" type="email" maxLength={191} /></div>
+          <div className="field"><label htmlFor="contactPerson">Autre personne à contacter</label><input id="contactPerson" name="contactPerson" maxLength={191} /></div>
+          <div className="field"><label htmlFor="contactMobile">Mobile</label><input id="contactMobile" name="contactMobile" type="tel" maxLength={50} /></div>
         </div>
       </QuestionnaireStep>
 
       <QuestionnaireStep
         active={step === 7}
         index={7}
-        title="Compléments"
+        title="État du dossier"
         description="Ajoutez une observation uniquement si le dossier est dégradé ou si vous avez rencontré une difficulté."
       >
         <div className="form-grid">
