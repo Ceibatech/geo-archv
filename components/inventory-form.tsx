@@ -385,12 +385,12 @@ export function InventoryForm({
           <div className="field"><label htmlFor="landTitleNumber">N° Titre foncier</label><input id="landTitleNumber" name="landTitleNumber" maxLength={100} placeholder="Facultatif" /></div>
           <div className="field"><label htmlFor="housingEstate">Lotissement</label><input id="housingEstate" name="housingEstate" maxLength={191} placeholder="Facultatif" /></div>
           <div className="field">
-            <label htmlFor="commune">Commune d’Abidjan</label>
+            <label htmlFor="commune">Commune / Ville</label>
             <select id="commune" name="commune" defaultValue="">
-              <option value="">Sélectionner une commune (facultatif)</option>
+              <option value="">Sélectionner une commune / ville (facultatif)</option>
               {ABIDJAN_COMMUNES.map((commune) => <option value={commune} key={commune}>{commune}</option>)}
             </select>
-            <p className="field-hint">Liste des dix communes d’Abidjan publiée par l’ANStat.</p>
+            <p className="field-hint">Sélectionnez la commune ou la ville si elle est indiquée sur le dossier.</p>
           </div>
         </div>
       </QuestionnaireStep>
@@ -431,8 +431,8 @@ export function InventoryForm({
       <QuestionnaireStep
         active={step === 5}
         index={5}
-        title="Quelle personne est concernée ?"
-        description="Recopiez l’identité et l’adresse figurant dans le dossier."
+        title="Acquéreur"
+        description="Recopiez l’identité et l’adresse de l’acquéreur figurant dans le dossier."
       >
         <div className="form-grid">
           <div className="field"><label htmlFor="lastName">Nom</label><input id="lastName" name="lastName" maxLength={100} placeholder="Facultatif" /></div>
@@ -448,23 +448,23 @@ export function InventoryForm({
         description="Ces informations sont facultatives."
       >
         <div className="form-grid">
-          <div className="field"><label htmlFor="phone">Téléphone</label><input id="phone" name="phone" type="tel" maxLength={50} placeholder="Facultatif" /></div>
-          <div className="field"><label htmlFor="email">E-mail</label><input id="email" name="email" type="email" maxLength={191} placeholder="Facultatif" /></div>
-          <div className="field"><label htmlFor="contactPerson">Personne à contacter</label><input id="contactPerson" name="contactPerson" maxLength={191} placeholder="Facultatif" /></div>
-          <div className="field"><label htmlFor="contactMobile">Mobile</label><input id="contactMobile" name="contactMobile" type="tel" maxLength={50} placeholder="Facultatif" /></div>
+          <div className="field"><label htmlFor="phone">Téléphone</label><input id="phone" name="phone" type="tel" maxLength={50} placeholder="Téléphone" /></div>
+          <div className="field"><label htmlFor="email">E-mail</label><input id="email" name="email" type="email" maxLength={191} placeholder="E-mail" /></div>
+          <div className="field"><label htmlFor="contactPerson">Autre personne à contacter</label><input id="contactPerson" name="contactPerson" maxLength={191} placeholder="Autre personne à contacter" /></div>
+          <div className="field"><label htmlFor="contactMobile">Mobile</label><input id="contactMobile" name="contactMobile" type="tel" maxLength={50} placeholder="Mobile" /></div>
         </div>
       </QuestionnaireStep>
 
       <QuestionnaireStep
         active={step === 7}
         index={7}
-        title="Avez-vous une observation à signaler ?"
-        description="Répondez seulement si le dossier est dégradé ou si vous avez rencontré une difficulté."
+        title="Compléments"
+        description="Ajoutez une observation uniquement si le dossier est dégradé ou si vous avez rencontré une difficulté."
       >
         <div className="form-grid">
           {!carton ? (
             <div className="field field-full">
-              <span className="field-label">Quel est l’état du carton ? *</span>
+              <span className="field-label">État du dossier</span>
               <div className="radio-group">
                 <label className="radio-option">
                   <input

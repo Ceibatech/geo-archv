@@ -119,7 +119,7 @@ export function InventoryCorrectionForm({ record, direction }: { record: Invento
           <div className="field"><label htmlFor="surfaceArea">Superficie (m²)</label><input id="surfaceArea" name="surfaceArea" type="number" min="0" step="0.01" defaultValue={record.surfaceArea ?? ""} /></div>
           <div className="field"><label htmlFor="landTitleNumber">N° Titre foncier</label><input id="landTitleNumber" name="landTitleNumber" defaultValue={record.landTitleNumber ?? ""} maxLength={100} /></div>
           <div className="field"><label htmlFor="housingEstate">Lotissement</label><input id="housingEstate" name="housingEstate" defaultValue={record.housingEstate ?? ""} maxLength={191} /></div>
-          <div className="field"><label htmlFor="commune">Commune</label><select id="commune" name="commune" defaultValue={record.commune ?? ""}><option value="">Sélectionner</option>{ABIDJAN_COMMUNES.map((commune) => <option value={commune} key={commune}>{commune}</option>)}</select></div>
+          <div className="field"><label htmlFor="commune">Commune / Ville</label><select id="commune" name="commune" defaultValue={record.commune ?? ""}><option value="">Sélectionner</option>{ABIDJAN_COMMUNES.map((commune) => <option value={commune} key={commune}>{commune}</option>)}</select></div>
           <div className="field field-full"><label htmlFor="caseNature">Nature du dossier *</label><select id="caseNature" name="caseNature" value={caseNatureSelection} onChange={(event) => setCaseNatureSelection(event.target.value)} required><option value="">Sélectionner</option>{caseNatures.map((nature) => <option value={nature} key={nature}>{nature}</option>)}<option value={CUSTOM_CASE_NATURE_OPTION}>Autre nature</option></select></div>
           {caseNatureSelection === CUSTOM_CASE_NATURE_OPTION ? <div className="field field-full"><label htmlFor="customCaseNature">Précisez la nature *</label><input id="customCaseNature" name="customCaseNature" defaultValue={record.caseNature} maxLength={170} required /></div> : null}
           <div className="field"><label htmlFor="lastName">Nom</label><input id="lastName" name="lastName" defaultValue={record.lastName ?? ""} maxLength={100} /></div>
@@ -127,7 +127,7 @@ export function InventoryCorrectionForm({ record, direction }: { record: Invento
           <div className="field field-full"><label htmlFor="address">Adresse</label><textarea id="address" name="address" defaultValue={record.address ?? ""} maxLength={2000} /></div>
           <div className="field"><label htmlFor="phone">Téléphone</label><input id="phone" name="phone" defaultValue={record.phone ?? ""} maxLength={50} /></div>
           <div className="field"><label htmlFor="email">E-mail</label><input id="email" name="email" type="email" defaultValue={record.email ?? ""} maxLength={191} /></div>
-          <div className="field"><label htmlFor="contactPerson">Personne à contacter</label><input id="contactPerson" name="contactPerson" defaultValue={record.contactPerson ?? ""} maxLength={191} /></div>
+          <div className="field"><label htmlFor="contactPerson">Autre personne à contacter</label><input id="contactPerson" name="contactPerson" defaultValue={record.contactPerson ?? ""} maxLength={191} /></div>
           <div className="field"><label htmlFor="contactMobile">Mobile</label><input id="contactMobile" name="contactMobile" defaultValue={record.contactMobile ?? ""} maxLength={50} /></div>
         </div>
         <div className="inventory-correction-flags">
