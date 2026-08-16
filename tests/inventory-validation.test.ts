@@ -93,7 +93,7 @@ describe("validation de la fiche simplifiée", () => {
     const result = createInventorySchema.safeParse({
       ...dossier,
       cartonId: 42,
-      commune: "Katiola",
+      commune: "VilleInconnue",
     });
 
     expect(result.success).toBe(false);

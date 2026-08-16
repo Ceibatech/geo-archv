@@ -25,27 +25,21 @@ describe("questionnaire d’inventaire agent", () => {
     expect(markup).toContain('type="radio" required="" name="cartonDamaged"');
   });
 
-  it("affiche un champ de recherche rapide pour filtrer la liste des communes", () => {
+  it("affiche un champ de recherche rapide avec suggestions visibles pour les communes", () => {
     const markup = renderToStaticMarkup(<InventoryForm carton={null} operator={operator} direction="DDU" />);
 
     expect(markup).toContain('placeholder="Rechercher une commune ou ville"');
-    expect(markup).toContain('<select id="commune" name="commune">');
+    expect(markup).toContain('id="commune-search"');
+    expect(markup).toContain('commune-search-results');
   });
 
-  it("affiche les communes et villes disponibles dans la liste déroulante", () => {
+  it("affiche les communes et villes disponibles dans le moteur de suggestions", () => {
     const markup = renderToStaticMarkup(<InventoryForm carton={null} operator={operator} direction="DDU" />);
 
-    const escapeHtmlAttribute = (value: string) =>
-      value
-        .replace(/&/g, "&amp;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#x27;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;");
-
-    expect(markup).toContain('<select id="commune" name="commune">');
-    for (const commune of ABIDJAN_COMMUNES) {
-      expect(markup).toContain(`value="${escapeHtmlAttribute(commune)}"`);
+    expect(markup).toContain('commune-search-results');
+    expect(markup).toContain('Rechercher une commune ou ville');
+    for (const commune of ABIDJAN_COMMUNES.slice(0, 3)) {
+      expect(markup).not.toContain(commune);
     }
   });
 

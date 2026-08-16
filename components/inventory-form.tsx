@@ -83,13 +83,25 @@ export function InventoryForm({
   const [hasDifficulty, setHasDifficulty] = useState(false);
   const [caseNatureSelection, setCaseNatureSelection] = useState("");
   const [communeSearch, setCommuneSearch] = useState("");
+  const [selectedCommune, setSelectedCommune] = useState("");
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
   const [consent, setConsent] = useState(false);
   const caseNatures = getCaseNaturesForDirection(direction);
-  const normalizedCommuneSearch = communeSearch.trim().toLowerCase();
+
+  function normalizeSearchTerm(value: string) {
+    return value
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim();
+  }
+
+  const normalizedCommuneSearch = normalizeSearchTerm(communeSearch);
   const filteredCommunes = normalizedCommuneSearch
-    ? ABIDJAN_COMMUNES.filter((commune) => commune.toLowerCase().includes(normalizedCommuneSearch))
-    : ABIDJAN_COMMUNES;
+    ? ABIDJAN_COMMUNES.filter((commune) => normalizeSearchTerm(commune).includes(normalizedCommuneSearch))
+    : [];
+  const hasCommuneSearch = communeSearch.trim().length > 0;
+  const finalCommuneValue = selectedCommune || (ABIDJAN_COMMUNES.includes(communeSearch) ? communeSearch : "");
 
   function focusStep(nextStep: number) {
     requestAnimationFrame(() => {
@@ -389,24 +401,52 @@ export function InventoryForm({
           <div className="field"><label htmlFor="landTitleNumber">N° Titre foncier</label><input id="landTitleNumber" name="landTitleNumber" maxLength={100} /></div>
           <div className="field"><label htmlFor="housingEstate">Lotissement</label><input id="housingEstate" name="housingEstate" maxLength={191} /></div>
           <div className="field">
-            <label htmlFor="communeSearch">Recherche rapide</label>
+            <label htmlFor="commune-search">Commune / Ville</label>
             <input
-              id="communeSearch"
-              type="search"
+              id="commune-search"
+              type="text"
               value={communeSearch}
-              onChange={(event) => setCommuneSearch(event.target.value)}
+              onChange={(event) => {
+                setCommuneSearch(event.target.value);
+                setSelectedCommune("");
+              }}
               placeholder="Rechercher une commune ou ville"
               autoComplete="off"
+              aria-label="Recherche rapide de commune ou ville"
             />
-            <label htmlFor="commune">Commune / Ville</label>
-            <select id="commune" name="commune" defaultValue="">
-              <option value="">Sélectionner une commune / ville (facultatif)</option>
-              {filteredCommunes.map((commune) => <option value={commune} key={commune}>{commune}</option>)}
-            </select>
+            <input type="hidden" name="commune" value={finalCommuneValue} />
+            <div
+              id="commune-search-results"
+              className="commune-search-results"
+              aria-live="polite"
+              aria-label="Suggestions de communes et villes"
+              hidden={!hasCommuneSearch}
+              aria-expanded={hasCommuneSearch}
+            >
+              {filteredCommunes.length > 0 ? (
+                filteredCommunes.slice(0, 25).map((commune) => (
+                  <button
+                    key={commune}
+                    type="button"
+                    className="commune-search-option"
+                    onClick={() => {
+                      setCommuneSearch(commune);
+                      setSelectedCommune(commune);
+                    }}
+                  >
+                    {commune}
+                  </button>
+                ))
+              ) : hasCommuneSearch ? (
+                <span className="commune-search-empty">Aucune commune ne correspond à cette recherche.</span>
+              ) : null}
+            </div>
             <p className="field-hint">
-              {filteredCommunes.length === 0
-                ? "Aucune commune ne correspond à cette recherche."
-                : `Affichage de ${filteredCommunes.length} commune${filteredCommunes.length > 1 ? "s" : ""}.`}
+              {hasCommuneSearch
+                ? filteredCommunes.length === 0
+                  ? "Aucune commune ne correspond à cette recherche."
+                  : `Suggestions affichées : ${Math.min(filteredCommunes.length, 25)} résultat${Math.min(filteredCommunes.length, 25) > 1 ? "s" : ""}.`
+                : "Saisissez ou choisissez une commune ou ville dans la liste."}
             </p>
           </div>
         </div>
