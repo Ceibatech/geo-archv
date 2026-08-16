@@ -338,7 +338,6 @@ export function InventoryForm({
               maxLength={100}
               defaultValue={carton?.barcode ?? ""}
               readOnly={Boolean(carton)}
-              placeholder="Facultatif"
             />
           </div>
         </div>
@@ -356,9 +355,9 @@ export function InventoryForm({
         description="Vous pouvez laisser un champ vide s’il n’existe pas sur le dossier."
       >
         <div className="form-grid form-grid-3">
-          <div className="field"><label htmlFor="guichetNumber">N° Guichet</label><input id="guichetNumber" name="guichetNumber" maxLength={100} autoFocus={Boolean(carton)} placeholder="Facultatif" /></div>
-          <div className="field"><label htmlFor="dduNumber">N° DDU</label><input id="dduNumber" name="dduNumber" maxLength={100} placeholder="Facultatif" /></div>
-          <div className="field"><label htmlFor="classificationReference">Référence de classement</label><input id="classificationReference" name="classificationReference" maxLength={191} placeholder="Facultatif" /></div>
+          <div className="field"><label htmlFor="guichetNumber">N° Guichet</label><input id="guichetNumber" name="guichetNumber" maxLength={100} autoFocus={Boolean(carton)} /></div>
+          <div className="field"><label htmlFor="dduNumber">N° DDU</label><input id="dduNumber" name="dduNumber" maxLength={100} /></div>
+          <div className="field"><label htmlFor="classificationReference">Référence de classement</label><input id="classificationReference" name="classificationReference" maxLength={191} /></div>
         </div>
       </QuestionnaireStep>
 
@@ -369,9 +368,9 @@ export function InventoryForm({
         description="Recopiez les numéros et la superficie indiqués sur le dossier."
       >
         <div className="form-grid form-grid-3">
-          <div className="field"><label htmlFor="ilotNumber">N° Îlot</label><input id="ilotNumber" name="ilotNumber" maxLength={100} placeholder="Facultatif" /></div>
-          <div className="field"><label htmlFor="lotNumber">N° Lot</label><input id="lotNumber" name="lotNumber" maxLength={100} placeholder="Facultatif" /></div>
-          <div className="field"><label htmlFor="surfaceArea">Superficie (m²)</label><input id="surfaceArea" name="surfaceArea" type="number" min="0" step="0.01" placeholder="Facultatif" /></div>
+          <div className="field"><label htmlFor="ilotNumber">N° Îlot</label><input id="ilotNumber" name="ilotNumber" maxLength={100} /></div>
+          <div className="field"><label htmlFor="lotNumber">N° Lot</label><input id="lotNumber" name="lotNumber" maxLength={100} /></div>
+          <div className="field"><label htmlFor="surfaceArea">Superficie (m²)</label><input id="surfaceArea" name="surfaceArea" type="number" min="0" step="0.01" /></div>
         </div>
       </QuestionnaireStep>
 
@@ -382,8 +381,8 @@ export function InventoryForm({
         description="Ajoutez le titre foncier et la localisation si ces informations sont disponibles."
       >
         <div className="form-grid form-grid-3">
-          <div className="field"><label htmlFor="landTitleNumber">N° Titre foncier</label><input id="landTitleNumber" name="landTitleNumber" maxLength={100} placeholder="Facultatif" /></div>
-          <div className="field"><label htmlFor="housingEstate">Lotissement</label><input id="housingEstate" name="housingEstate" maxLength={191} placeholder="Facultatif" /></div>
+          <div className="field"><label htmlFor="landTitleNumber">N° Titre foncier</label><input id="landTitleNumber" name="landTitleNumber" maxLength={100} /></div>
+          <div className="field"><label htmlFor="housingEstate">Lotissement</label><input id="housingEstate" name="housingEstate" maxLength={191} /></div>
           <div className="field">
             <label htmlFor="commune">Commune / Ville</label>
             <select id="commune" name="commune" defaultValue="">
